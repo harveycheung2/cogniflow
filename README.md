@@ -1,4 +1,4 @@
-# Agentic Workday OS v2 ⚡
+# CogniFlow OS ⚡
 
 A high-performance, multi-agent academic and workday orchestration system for university students and professionals.
 

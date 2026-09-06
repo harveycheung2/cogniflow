@@ -27,6 +27,6 @@ if (-not (Test-Path '.env')) {
     }
 }
 
-Write-Host "Starting Agentic Workday OS v2 with Python: $python" -ForegroundColor Green
+Write-Host "Starting CogniFlow OS with Python: $python" -ForegroundColor Green
 Start-Process 'http://127.0.0.1:8765'
 & $python app.py

@@ -9,7 +9,7 @@ from services.planner import generate_day_schedule
 from services.document_agent import document_agent
 from services.ntulearn import ntulearn_service
 
-LEAD_SYSTEM_PROMPT = """You are the Lead Orchestrator of Agentic Workday OS v2.
+LEAD_SYSTEM_PROMPT = """You are the Lead Orchestrator of CogniFlow OS.
 You supervise multiple specialized sub-agents to organize the student's academic life for Semester 1 (26S1).
 
 Available Sub-Agents to Delegate to:
