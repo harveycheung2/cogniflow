@@ -139,11 +139,15 @@ class NTULearnService:
                     ann_title = ann.get("title", "Course Announcement")
                     raw_body = ann.get("body", "")
                     if isinstance(raw_body, dict):
-                        raw_body = raw_body.get("raw") or raw_body.get("text") or ""
+                        raw_body = raw_body.get("rawText") or raw_body.get("displayText") or raw_body.get("text") or raw_body.get("raw") or ""
                     elif not isinstance(raw_body, str):
                         raw_body = str(raw_body or "")
-                    ann_body = re.sub(r'<[^>]+>', '', raw_body).strip()
-                    posted_at = ann.get("created", "")
+                    import html as html_module
+                    clean_text = html_module.unescape(raw_body)
+                    clean_text = re.sub(r'<br\s*/?>', '\n', clean_text)
+                    clean_text = re.sub(r'</p>', '\n', clean_text)
+                    ann_body = re.sub(r'<[^>]+>', '', clean_text).strip()
+                    posted_at = ann.get("createdDate") or ann.get("modifiedDate") or ann.get("created", "")
                     db.upsert_announcement(ann_id, course_id, course_code, ann_title, ann_body, posted_at)
                     announcements_saved += 1
 
@@ -154,12 +158,12 @@ class NTULearnService:
         }
 
     def crawl_course_materials(self, course_id: str, course_code: str = "") -> List[Dict[str, Any]]:
-        """Recursively crawl all contents, folders, and documents for a course."""
+        """Recursively crawl all contents, folders, and documents for a course including Blackboard Ultra documents."""
         discovered = []
         visited_ids = set()
 
         def _traverse(url: str, parent_id: str = "", depth: int = 0):
-            if depth > 4:
+            if depth > 8:
                 return
             data = self._api_get(url)
             if not data or "results" not in data:
@@ -197,36 +201,83 @@ class NTULearnService:
                 elif "file" in handler_str.lower() or "attachment" in handler_str.lower():
                     download_url = f"{NTULEARN_BASE_URL}/webapps/blackboard/execute/content/file?cmd=view&content_id={cid}&course_id={course_id}"
 
-                doc_type = infer_doc_type(title, f_name)
+                # Check if this is an Ultra Document or folder containing embedded files in HTML body
+                embedded_files_found = False
+                raw_body = item.get("body", {}).get("rawText") or ""
+                if not raw_body and "document" in handler_str.lower():
+                    detail_resp = self._api_get(f"{NTULEARN_BASE_URL}/learn/api/v1/courses/{course_id}/contents/{cid}")
+                    if detail_resp:
+                        raw_body = detail_resp.get("body", {}).get("rawText") or ""
 
-                # Upsert into SQLite
-                db.upsert_material(
-                    mat_id=cid,
-                    course_id=course_id,
-                    title=title,
-                    content_type=handler_str,
-                    url=item.get("links", {}).get("self", ""),
-                    download_url=download_url,
-                    parent_id=parent_id,
-                    course_code=course_code,
-                    file_size=f_size,
-                    file_name=f_name,
-                    doc_type=doc_type
-                )
+                if raw_body:
+                    import html as html_lib
+                    unescaped = html_lib.unescape(raw_body)
+                    bbfile_matches = re.findall(r'data-bbfile=["\']({.*?})["\']', unescaped)
+                    file_idx = 0
+                    for m_json in bbfile_matches:
+                        try:
+                            finfo = json.loads(m_json)
+                            r_url = finfo.get("resourceUrl") or ""
+                            d_name = finfo.get("displayName") or finfo.get("linkName") or ""
+                            if r_url:
+                                file_idx += 1
+                                sub_id = f"{cid}_f{file_idx}" if file_idx > 1 else cid
+                                sub_title = d_name or title
+                                sub_doctype = infer_doc_type(sub_title, d_name)
+                                db.upsert_material(
+                                    mat_id=sub_id,
+                                    course_id=course_id,
+                                    title=sub_title,
+                                    content_type="resource/x-bb-file",
+                                    url=item.get("links", {}).get("self", ""),
+                                    download_url=r_url,
+                                    parent_id=parent_id or cid,
+                                    course_code=course_code,
+                                    file_size=0,
+                                    file_name=d_name,
+                                    doc_type=sub_doctype
+                                )
+                                discovered.append({
+                                    "id": sub_id,
+                                    "title": sub_title,
+                                    "file_name": d_name,
+                                    "download_url": r_url,
+                                    "doc_type": sub_doctype,
+                                    "course_code": course_code,
+                                    "file_size": 0
+                                })
+                                embedded_files_found = True
+                        except Exception:
+                            pass
 
-                item_record = {
-                    "id": cid,
-                    "title": title,
-                    "file_name": f_name,
-                    "download_url": download_url,
-                    "doc_type": doc_type,
-                    "course_code": course_code,
-                    "file_size": f_size,
-                }
-                discovered.append(item_record)
+                if not embedded_files_found:
+                    doc_type = infer_doc_type(title, f_name)
+                    db.upsert_material(
+                        mat_id=cid,
+                        course_id=course_id,
+                        title=title,
+                        content_type=handler_str,
+                        url=item.get("links", {}).get("self", ""),
+                        download_url=download_url,
+                        parent_id=parent_id,
+                        course_code=course_code,
+                        file_size=f_size,
+                        file_name=f_name,
+                        doc_type=doc_type
+                    )
+                    item_record = {
+                        "id": cid,
+                        "title": title,
+                        "file_name": f_name,
+                        "download_url": download_url,
+                        "doc_type": doc_type,
+                        "course_code": course_code,
+                        "file_size": f_size,
+                    }
+                    discovered.append(item_record)
 
-                # If folder or lesson, recurse into children
-                if any(x in handler_str for x in ["folder", "lesson", "module"]) or item.get("hasChildren"):
+                # If folder, lesson, module, or document has children, recurse
+                if any(x in handler_str for x in ["folder", "lesson", "module", "document"]) or item.get("hasChildren"):
                     child_url = f"{NTULEARN_BASE_URL}/learn/api/v1/courses/{course_id}/contents/{cid}/children?limit=100"
                     _traverse(child_url, parent_id=cid, depth=depth + 1)
 

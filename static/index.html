@@ -666,6 +666,159 @@ body {
   letter-spacing: 0.01em;
 }
 
+
+/* Timetable Intelligence UI Styles */
+.timetable-panel-container {
+  padding: 12px 16px 4px 16px;
+}
+.timetable-prompt-card {
+  background: linear-gradient(135deg, rgba(0, 242, 254, 0.05) 0%, rgba(79, 172, 254, 0.08) 100%);
+  border: 1.5px dashed rgba(0, 242, 254, 0.35);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  transition: all 0.25s ease;
+}
+.timetable-prompt-card:hover {
+  border-color: var(--accent-cyan);
+  background: linear-gradient(135deg, rgba(0, 242, 254, 0.08) 0%, rgba(79, 172, 254, 0.14) 100%);
+  box-shadow: 0 4px 18px rgba(0, 242, 254, 0.12);
+}
+.timetable-prompt-icon { font-size: 1.8rem; flex-shrink: 0; }
+.timetable-prompt-content { flex: 1; }
+.timetable-prompt-title { font-size: 0.88rem; font-weight: 600; color: #fff; margin-bottom: 2px; }
+.timetable-prompt-subtitle { font-size: 0.74rem; color: var(--text-muted); line-height: 1.35; margin-bottom: 8px; }
+.timetable-upload-btn { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; margin: 0; }
+
+.timetable-saved-card {
+  background: linear-gradient(135deg, rgba(20, 28, 45, 0.85) 0%, rgba(30, 42, 65, 0.7) 100%);
+  border: 1px solid rgba(0, 242, 254, 0.25);
+  border-left: 4px solid var(--accent-cyan);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.timetable-saved-card:hover {
+  transform: translateY(-1px);
+  border-color: var(--accent-cyan);
+  box-shadow: 0 4px 20px rgba(0, 242, 254, 0.15);
+}
+.timetable-saved-left { display: flex; align-items: center; gap: 10px; }
+.timetable-saved-icon { font-size: 1.5rem; }
+.timetable-saved-title { font-size: 0.85rem; font-weight: 600; color: #fff; display: flex; align-items: center; gap: 6px; }
+.timetable-saved-meta { font-size: 0.72rem; color: var(--text-muted); margin-top: 2px; }
+.timetable-saved-actions { display: flex; align-items: center; gap: 6px; }
+
+/* Timetable Modal */
+.modal-backdrop {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(4, 7, 13, 0.82);
+  backdrop-filter: blur(8px);
+  z-index: 1000;
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+}
+.modal-backdrop.hidden { display: none; }
+.timetable-modal-card {
+  background: #0f1523;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-lg);
+  width: 95vw;
+  max-width: 1200px;
+  max-height: 90vh;
+  display: flex; flex-direction: column;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.75);
+  overflow: hidden;
+}
+.tt-modal-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex; justify-content: space-between; align-items: center;
+  background: rgba(20, 26, 40, 0.95);
+}
+.tt-modal-tabs {
+  display: flex; gap: 8px; margin-bottom: 16px;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 10px;
+}
+.tt-tab-content { display: none; }
+.tt-tab-content.active { display: block; }
+
+.timetable-grid-container {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+@media (max-width: 900px) {
+  .timetable-grid-container { grid-template-columns: 1fr; }
+}
+.day-column {
+  background: rgba(22, 30, 48, 0.5);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 10px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.day-column-header {
+  font-size: 0.8rem; font-weight: 700; color: var(--accent-cyan);
+  text-transform: uppercase; letter-spacing: 0.5px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  display: flex; justify-content: space-between;
+}
+.class-slot-card {
+  background: rgba(30, 42, 68, 0.85);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  display: flex; flex-direction: column; gap: 4px;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+.class-slot-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+.class-slot-header { display: flex; justify-content: space-between; align-items: center; }
+.class-slot-course { font-size: 0.82rem; font-weight: 700; color: #fff; }
+.class-slot-badge {
+  font-size: 0.65rem; padding: 2px 6px; border-radius: 4px;
+  font-weight: 600; text-transform: uppercase;
+}
+.badge-lec { background: rgba(0, 242, 254, 0.15); color: var(--accent-cyan); border: 1px solid rgba(0, 242, 254, 0.3); }
+.badge-tut { background: rgba(246, 211, 101, 0.15); color: var(--accent-yellow); border: 1px solid rgba(246, 211, 101, 0.3); }
+.badge-lab { background: rgba(255, 107, 107, 0.15); color: var(--accent-red); border: 1px solid rgba(255, 107, 107, 0.3); }
+
+.class-slot-time { font-size: 0.72rem; color: var(--text-muted); display: flex; align-items: center; gap: 4px; }
+.class-slot-venue {
+  font-size: 0.72rem; color: #fff; font-weight: 500;
+  display: flex; align-items: center; gap: 4px;
+  background: rgba(0, 0, 0, 0.25); padding: 2px 6px; border-radius: 4px;
+  width: fit-content;
+}
+.class-slot-weeks { font-size: 0.65rem; color: var(--text-muted); }
+
+.tt-courses-table-container {
+  overflow-x: auto;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+}
+.tt-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; text-align: left; }
+.tt-table th {
+  background: rgba(25, 34, 54, 0.85); color: var(--text-muted);
+  font-weight: 600; padding: 10px 14px; border-bottom: 1px solid var(--border-color);
+}
+.tt-table td { padding: 10px 14px; border-bottom: 1px solid rgba(255, 255, 255, 0.04); color: var(--text-main); }
+.tt-table tr:hover td { background: rgba(255, 255, 255, 0.02); }
+.exam-pill { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 0.72rem; font-weight: 600; }
+.exam-scheduled { background: rgba(255, 107, 107, 0.15); color: #ff8e8e; border: 1px solid rgba(255, 107, 107, 0.3); }
+.exam-na { color: var(--text-muted); }
+
 </style>
 </head>
 <body>
@@ -720,6 +873,7 @@ body {
 
       <!-- Left: Schedule & Tasks -->
       <section class="panel schedule-panel">
+        <div id="timetable-panel-container" class="timetable-panel-container"></div>
         <div class="panel-header">
           <h2>&#9200; Today's Time-Blocked Schedule</h2>
           <span id="schedule-counter" class="count-tag">0 Blocks</span>
@@ -858,6 +1012,7 @@ function switchView(viewName) {
 }
 
 function refreshAll() {
+  fetchTimetableStatus();
   fetchSchedule();
   fetchTasks();
   fetchCourses();
@@ -1362,6 +1517,277 @@ function escapeHtml(str) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
 }
-  </script>
+  
+
+// ==========================================================================
+// Timetable Intelligence & Extraction Controller
+// ==========================================================================
+let currentTimetableData = null;
+
+async function fetchTimetableStatus() {
+  try {
+    const res = await fetch(`/api/timetable?term=${currentTerm}`);
+    const data = await res.json();
+    const container = document.getElementById("timetable-panel-container");
+    if (!container) return;
+
+    if (data.has_timetable && data.timetable) {
+      currentTimetableData = data.timetable;
+      const parsed = data.timetable.parsed_data || {};
+      const sName = parsed.student_name || "Harvey Chin-Tao Cheung";
+      const totalCourses = parsed.total_courses || (parsed.courses ? parsed.courses.length : 0);
+      const totalAus = parsed.total_aus || 0;
+      const slotsCount = parsed.weekly_slots ? parsed.weekly_slots.length : 0;
+
+      container.innerHTML = `
+        <div class="timetable-saved-card" onclick="openTimetableViewer()" title="Click to view full weekly schedule and exam dates">
+          <div class="timetable-saved-left">
+            <div class="timetable-saved-icon">📅</div>
+            <div>
+              <div class="timetable-saved-title">
+                <span>${escapeHtml(sName)}'s Timetable</span>
+                <span class="count-tag" style="font-size:0.68rem; padding:1px 6px;">${totalCourses} Modules</span>
+              </div>
+              <div class="timetable-saved-meta">
+                ${totalAus} AUs • ${slotsCount} Weekly Slots • Click to Open
+              </div>
+            </div>
+          </div>
+          <div class="timetable-saved-actions">
+            <button class="btn btn-sm btn-outline" style="padding:4px 8px;" onclick="event.stopPropagation(); openTimetableViewer()">🔍 View</button>
+            <label class="btn btn-sm btn-outline" style="padding:4px 8px; cursor:pointer;" onclick="event.stopPropagation()">
+              <span>🔄</span>
+              <input type="file" accept=".pdf,.png,.jpg,.jpeg" style="display:none;" onchange="uploadTimetable(event)">
+            </label>
+          </div>
+        </div>
+      `;
+    } else {
+      currentTimetableData = null;
+      container.innerHTML = `
+        <div class="timetable-prompt-card">
+          <div class="timetable-prompt-icon">📅</div>
+          <div class="timetable-prompt-content">
+            <div class="timetable-prompt-title">Attach Official STARS Timetable</div>
+            <div class="timetable-prompt-subtitle">Upload your course registration timetable (PDF) to auto-extract weekly classes, venues, and exam dates.</div>
+            <label class="btn btn-sm btn-primary timetable-upload-btn">
+              <span>📎 Attach Timetable</span>
+              <input type="file" accept=".pdf,.png,.jpg,.jpeg" style="display:none;" onchange="uploadTimetable(event)">
+            </label>
+          </div>
+        </div>
+      `;
+    }
+  } catch (err) {
+    console.error("Failed to fetch timetable status:", err);
+  }
+}
+
+async function uploadTimetable(event) {
+  const file = event.target.files ? event.target.files[0] : null;
+  if (!file) return;
+
+  showToast(`⏳ Extracting academic data from ${file.name}...`);
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("term", currentTerm);
+
+  try {
+    const res = await fetch("/api/timetable/upload", {
+      method: "POST",
+      body: formData
+    });
+    const result = await res.json();
+    if (!res.ok) {
+      showToast(`❌ ${result.detail || 'Upload failed'}`);
+      return;
+    }
+
+    showToast(`✅ Timetable extracted for ${result.data?.student_name || 'student'}!`);
+    await fetchTimetableStatus();
+    fetchSchedule();
+    fetchTasks();
+    openTimetableViewer();
+  } catch (err) {
+    console.error("Timetable upload error:", err);
+    showToast("❌ Network error during timetable upload.");
+  }
+}
+
+function openTimetableViewer() {
+  const modal = document.getElementById("modal-timetable-viewer");
+  if (!modal) return;
+  modal.classList.remove("hidden");
+
+  if (currentTimetableData && currentTimetableData.parsed_data) {
+    const p = currentTimetableData.parsed_data;
+    const titleEl = document.getElementById("tt-modal-title");
+    const subEl = document.getElementById("tt-modal-subtitle");
+    if (titleEl) {
+      titleEl.innerHTML = `<span>📅</span> <span>${escapeHtml(p.student_name || 'Official')} Timetable</span>`;
+    }
+    if (subEl) {
+      subEl.innerText = `${p.academic_year || '2026'} ${p.semester || 'Semester 1'} • ${p.total_courses || 0} Modules • ${p.total_aus || 0} Total AUs`;
+    }
+
+    renderTimetableGrid(p.weekly_slots || []);
+    renderTimetableCourses(p.courses || []);
+  } else {
+    fetchTimetableStatus().then(() => {
+      if (currentTimetableData && currentTimetableData.parsed_data) {
+        openTimetableViewer();
+      }
+    });
+  }
+}
+
+function closeTimetableViewer() {
+  const modal = document.getElementById("modal-timetable-viewer");
+  if (modal) modal.classList.add("hidden");
+}
+
+function switchTimetableTab(tabName) {
+  document.getElementById("tt-tab-grid-btn").classList.toggle("active", tabName === "grid");
+  document.getElementById("tt-tab-courses-btn").classList.toggle("active", tabName === "courses");
+  document.getElementById("tt-tab-grid").classList.toggle("active", tabName === "grid");
+  document.getElementById("tt-tab-courses").classList.toggle("active", tabName === "courses");
+}
+
+function renderTimetableGrid(weeklySlots) {
+  const container = document.getElementById("timetable-weekly-grid");
+  if (!container) return;
+
+  const days = ["MON", "TUE", "WED", "THU", "FRI"];
+  const dayNames = { "MON": "Monday", "TUE": "Tuesday", "WED": "Wednesday", "THU": "Thursday", "FRI": "Friday" };
+
+  container.innerHTML = days.map(day => {
+    const daySlots = weeklySlots.filter(s => s.day === day);
+    const slotsHtml = daySlots.length > 0 ? daySlots.map(s => {
+      let badgeClass = "badge-lec";
+      if (s.event_type.includes("TUT")) badgeClass = "badge-tut";
+      else if (s.event_type.includes("LAB")) badgeClass = "badge-lab";
+
+      return `
+        <div class="class-slot-card">
+          <div class="class-slot-header">
+            <span class="class-slot-course">${escapeHtml(s.course_code)}</span>
+            <span class="class-slot-badge ${badgeClass}">${escapeHtml(s.event_type)}</span>
+          </div>
+          <div class="class-slot-time">
+            <span>⏱ ${escapeHtml(s.time_range)}</span>
+            ${s.group ? `<span style="font-size:0.68rem; color:var(--accent-blue); font-weight:600;">[${escapeHtml(s.group)}]</span>` : ''}
+          </div>
+          <div class="class-slot-venue">
+            <span>📍</span>
+            <span>${escapeHtml(s.venue || 'Venue TBA')}</span>
+          </div>
+          <div class="class-slot-weeks">🗓 ${escapeHtml(s.weeks || 'All Weeks')}</div>
+        </div>
+      `;
+    }).join("") : `<div style="font-size:0.75rem; color:var(--text-muted); padding:12px; text-align:center;">No classes</div>`;
+
+    return `
+      <div class="day-column">
+        <div class="day-column-header">
+          <span>${dayNames[day]}</span>
+          <span style="color:var(--text-muted); font-size:0.7rem;">${daySlots.length} Slots</span>
+        </div>
+        ${slotsHtml}
+      </div>
+    `;
+  }).join("");
+}
+
+function renderTimetableCourses(courses) {
+  const tbody = document.getElementById("tt-courses-tbody");
+  if (!tbody) return;
+
+  if (!courses || courses.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:20px; color:var(--text-muted);">No courses found.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = courses.map(c => {
+    const hasExam = c.exam_schedule && !c.exam_schedule.toLowerCase().includes("not applicable");
+    const examHtml = hasExam
+      ? `<span class="exam-pill exam-scheduled">🗓 ${escapeHtml(c.exam_schedule)}</span>`
+      : `<span class="exam-pill exam-na">Not Applicable</span>`;
+
+    return `
+      <tr>
+        <td><strong style="color:var(--accent-cyan);">${escapeHtml(c.index || '-')}</strong></td>
+        <td><strong>${escapeHtml(c.course_code)}</strong></td>
+        <td>${escapeHtml(c.title || '')}</td>
+        <td><span class="count-tag">${escapeHtml(String(c.aus || 0))} AU</span></td>
+        <td><span style="color:var(--accent-green); font-weight:600;">● ${escapeHtml(c.status || 'Registered')}</span></td>
+        <td>${examHtml}</td>
+      </tr>
+    `;
+  }).join("");
+}
+
+</script>
+
+    <!-- Timetable Interactive Viewer Modal -->
+    <div id="modal-timetable-viewer" class="modal-backdrop hidden" onclick="if(event.target===this) closeTimetableViewer()">
+      <div class="modal-card timetable-modal-card">
+        <div class="tt-modal-header">
+          <div>
+            <h3 id="tt-modal-title" style="margin:0; font-size:1.15rem; color:#fff; display:flex; align-items:center; gap:8px;">
+              <span>📅</span> <span>Official STARS Timetable</span>
+            </h3>
+            <div id="tt-modal-subtitle" style="font-size:0.75rem; color:var(--text-muted); margin-top:3px;">
+              Student Timetable & Registered Modules
+            </div>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <a id="btn-open-tt-pdf" href="/api/timetable/file" target="_blank" class="btn btn-sm btn-primary" style="display:inline-flex; align-items:center; gap:5px; text-decoration:none;">
+              📄 Open Original PDF
+            </a>
+            <label class="btn btn-sm btn-outline" style="cursor:pointer; margin:0; display:inline-flex; align-items:center; gap:5px;">
+              <span>🔄 Replace Timetable</span>
+              <input type="file" accept=".pdf,.png,.jpg,.jpeg" style="display:none;" onchange="uploadTimetable(event)">
+            </label>
+            <button class="btn btn-sm btn-outline" onclick="closeTimetableViewer()" style="font-weight:bold;">✕</button>
+          </div>
+        </div>
+
+        <div class="modal-body" style="padding:16px; overflow-y:auto; max-height:calc(85vh - 70px);">
+          <div class="tt-modal-tabs">
+            <button id="tt-tab-grid-btn" class="tab-btn active" onclick="switchTimetableTab('grid')">📅 Weekly Timetable Grid</button>
+            <button id="tt-tab-courses-btn" class="tab-btn" onclick="switchTimetableTab('courses')">📚 Registered Modules & Exams</button>
+          </div>
+
+          <!-- Tab 1: Weekly Grid -->
+          <div id="tt-tab-grid" class="tt-tab-content active">
+            <div class="timetable-grid-container" id="timetable-weekly-grid">
+              <div class="empty-state">Loading schedule slots...</div>
+            </div>
+          </div>
+
+          <!-- Tab 2: Registered Courses Table -->
+          <div id="tt-tab-courses" class="tt-tab-content">
+            <div class="tt-courses-table-container">
+              <table class="tt-table" id="tt-courses-table">
+                <thead>
+                  <tr>
+                    <th>Index</th>
+                    <th>Module</th>
+                    <th>Course Title</th>
+                    <th>AUs</th>
+                    <th>Status</th>
+                    <th>Exam Schedule</th>
+                  </tr>
+                </thead>
+                <tbody id="tt-courses-tbody">
+                  <tr><td colspan="6" style="text-align:center; padding:20px;">Loading courses...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
 </body>
 </html>

@@ -16,46 +16,74 @@ SCHEDULE_KEYWORDS = [
     "ca1", "ca2", "final exam"
 ]
 
+SOLUTION_KEYWORDS = [
+    "solution", "solutions", "answer", "answers", "ans", "worked",
+    "key", "marking scheme", "rubric"
+]
+
 class DocumentAgent:
     def __init__(self):
         self.specialist_model = SPECIALIST_MODEL_ID
         self.lead_model = LEAD_MODEL_ID
 
-    def extract_text_from_pdf(self, file_path: Path, max_pages: int = 30) -> Dict[str, Any]:
-        """Extract text from PDF, prioritizing schedule and syllabus pages."""
+    def extract_text_and_questions(self, file_path: Path, max_pages: int = 25) -> Dict[str, Any]:
+        """Deep text extractor that reads across pages, finds questions, and detects solutions."""
         if not file_path.exists():
-            return {"text": "", "page_count": 0, "schedule_pages": []}
+            return {"text": "", "page_count": 0, "questions": [], "is_solution": False}
 
         try:
             reader = pypdf.PdfReader(str(file_path))
             total_pages = len(reader.pages)
             extracted_pages = []
-            schedule_pages = []
+            all_text_chunks = []
 
             for i in range(min(total_pages, max_pages)):
                 try:
                     page_text = reader.pages[i].extract_text() or ""
                     clean_text = page_text.strip()
                     if clean_text:
-                        extracted_pages.append(f"--- [Slide/Page {i+1}] ---\n{clean_text}")
-                        if any(k in clean_text.lower() for k in SCHEDULE_KEYWORDS):
-                            schedule_pages.append(i + 1)
+                        extracted_pages.append(f"--- [Page {i+1}] ---\n{clean_text}")
+                        all_text_chunks.append(clean_text)
                 except Exception:
                     continue
 
+            full_text = "\n\n".join(extracted_pages)
+            combined_raw = " ".join(all_text_chunks)
+
+            # 1. Detect if solution sheet vs question sheet
+            is_solution = False
+            lower_name = file_path.name.lower()
+            if any(k in lower_name for k in ["solution", "sol", "answer", "ans."]):
+                is_solution = True
+            elif any(k in combined_raw[:1000].lower() for k in ["solution", "solutions", "model answer"]):
+                is_solution = True
+
+            # 2. Extract individual numbered questions
+            # e.g. "1. Calculate...", "2. When investigating..."
+            question_pattern = re.compile(
+                r'(?:^|\n)\s*(\d{1,2}\.|Q\d+[:.]?)\s+([A-Z0-9][^\n]{15,200})',
+                re.MULTILINE
+            )
+            found_questions = []
+            for match in question_pattern.finditer(full_text):
+                q_num = match.group(1).strip()
+                q_snippet = re.sub(r'\s+', ' ', match.group(2)).strip()
+                found_questions.append(f"{q_num} {q_snippet[:140]}...")
+
             return {
-                "text": "\n\n".join(extracted_pages),
+                "text": full_text,
+                "raw_excerpt": re.sub(r'\s+', ' ', full_text)[:3000],
                 "page_count": total_pages,
-                "schedule_pages": schedule_pages,
+                "questions": found_questions[:8],
+                "is_solution": is_solution,
             }
         except Exception as e:
-            return {"text": "", "page_count": 0, "schedule_pages": [], "error": str(e)}
+            return {"text": "", "raw_excerpt": "", "page_count": 0, "questions": [], "is_solution": False, "error": str(e)}
 
     def parse_schedule_heuristic(self, text: str, course_code: str, doc_id: str, doc_title: str) -> List[Dict[str, Any]]:
         """Deterministic extractor for course schedules & assessment slides."""
         schedule_items = []
 
-        # Line by line pattern for lecture & tutorial schedule tables
         line_pattern = re.compile(
             r'^\s*(\d{1,2})\s+([0-3]?\d\s+[A-Za-z]+(?:\s+\d{4})?)\s+(.*?)\s+(LT\d+.*|Online.*|Hive.*|LHN.*)?\s*(T\d+|Tutorial\s*\d+)?\s*$',
             re.IGNORECASE
@@ -96,7 +124,6 @@ class DocumentAgent:
                 except Exception:
                     continue
 
-        # Match assessment weights e.g. "2 CAs (Lecture + Lab) 60%", "1 Final Exam 40%"
         ca_matches = re.findall(
             r'(\d+\s*(?:CA[s]?|Continuous Assessment|Quiz|Test|Exam|Project)[^\n\d]*?(\d{1,3}%))',
             text, re.IGNORECASE
@@ -116,7 +143,7 @@ class DocumentAgent:
         return schedule_items
 
     def analyze_document(self, mat_id: str) -> Dict[str, Any]:
-        """Classifies document and extracts schedule using Bedrock or heuristic fallback."""
+        """Deeply reads into the document text, classifies content, extracts questions & schedule."""
         mat = db.get_material_by_id(mat_id)
         if not mat:
             return {"success": False, "error": "Material not found"}
@@ -125,19 +152,8 @@ class DocumentAgent:
         course_code = mat.get("course_code") or "General"
         title = mat.get("title") or "Untitled Document"
 
-        # Download if needed or if corrupted
-        needs_download = False
+        # Ensure downloaded and valid
         if not local_path or not Path(local_path).exists():
-            needs_download = True
-        else:
-            try:
-                with open(local_path, "rb") as test_f:
-                    if test_f.read(50).startswith(b"<!doc"):
-                        needs_download = True
-            except Exception:
-                needs_download = True
-
-        if needs_download:
             download_url = mat.get("download_url")
             if not download_url:
                 return {"success": False, "error": "No download URL available"}
@@ -152,10 +168,22 @@ class DocumentAgent:
                 return {"success": False, "error": "Failed to download document"}
             local_path = str(path_obj)
 
-        pdf_info = self.extract_text_from_pdf(Path(local_path))
-        raw_text = pdf_info.get("text", "")
+        doc_info = self.extract_text_and_questions(Path(local_path))
+        raw_text = doc_info.get("text", "")
+        raw_excerpt = doc_info.get("raw_excerpt", "")
+        questions_found = doc_info.get("questions", [])
+        is_solution = doc_info.get("is_solution", False)
+
         extracted_schedule = []
-        doc_type = mat.get("doc_type") or "REFERENCE"
+        doc_type = "TUTORIAL_SOLUTION" if is_solution else "TUTORIAL_QUESTION"
+        if not ("tutorial" in title.lower() or "tut" in title.lower() or "edx" in title.lower() or "ir " in title.lower() or "xrd" in title.lower() or "xps" in title.lower() or "t1" in title.lower() or "t2" in title.lower()):
+            if "lec" in title.lower() or "slide" in title.lower():
+                doc_type = "LECTURE_SLIDES"
+            elif "schedule" in title.lower() or "syllabus" in title.lower():
+                doc_type = "SYLLABUS_SCHEDULE"
+            else:
+                doc_type = "REFERENCE"
+
         week_number = 0
         topic = ""
         summary = ""
@@ -165,21 +193,23 @@ class DocumentAgent:
         if heuristic_schedules:
             extracted_schedule.extend(heuristic_schedules)
 
-        # Bedrock analysis attempt
+        # Bedrock Specialist Reading into Document
         bedrock_success = False
         if bedrock_client.is_ready() and len(raw_text) > 40:
-            prompt = f"""Analyze this course document from {course_code} ({title}):
+            prompt = f"""You are the AWS Bedrock Document Specialist. Read this course material from {course_code} ({title}):
 
-=== DOCUMENT EXCERPT ===
-{raw_text[:4000]}
-=== END EXCERPT ===
+=== EXTRACTED DOCUMENT TEXT ===
+{raw_excerpt[:3500]}
+=== END TEXT ===
 
-Return ONLY a JSON object:
+Analyze the actual contents and return ONLY valid JSON:
 {{
   "doc_type": "TUTORIAL_QUESTION" | "TUTORIAL_SOLUTION" | "LECTURE_SLIDES" | "SYLLABUS_SCHEDULE" | "ASSIGNMENT_BRIEF" | "LAB_GUIDE" | "REFERENCE",
+  "is_solution": <true if this document contains answers/solutions, false if it is a question sheet>,
   "week_number": <int or 0>,
-  "topic": "<short subject topic>",
-  "summary": "<2-3 sentence overview>",
+  "topic": "<primary technical topic covered, e.g. 'SEM-EDX & Backscattered Electron Contrast' or 'Infrared Spectroscopy & Vibrational Modes'>",
+  "summary": "<2-3 sentence overview explaining what concepts are covered and what the student is required to do>",
+  "key_questions": ["<Question 1 summary>", "<Question 2 summary>"],
   "schedule_items": [
     {{
       "week_number": <int>,
@@ -193,7 +223,7 @@ Return ONLY a JSON object:
             try:
                 ai_resp = bedrock_client.converse(
                     messages=[{"role": "user", "content": prompt}],
-                    system_prompt="You are an academic document specialist. Output strictly JSON.",
+                    system_prompt="You are an academic materials intelligence reader. Output strictly valid JSON without markdown wrapping.",
                     model_id=self.specialist_model,
                     max_tokens=700,
                     temperature=0.1
@@ -203,9 +233,12 @@ Return ONLY a JSON object:
                 data = json.loads(clean_json)
 
                 doc_type = data.get("doc_type", doc_type)
+                is_solution = data.get("is_solution", is_solution)
                 week_number = data.get("week_number", 0)
                 topic = data.get("topic", "")
                 summary = data.get("summary", "")
+                if data.get("key_questions"):
+                    questions_found = data.get("key_questions")
                 for s in data.get("schedule_items", []):
                     s["source_doc_id"] = mat_id
                     s["source_doc_title"] = title
@@ -215,10 +248,12 @@ Return ONLY a JSON object:
                 bedrock_success = False
 
         if not summary:
-            if "TUTORIAL" in doc_type:
-                summary = f"Tutorial exercise document for {course_code}. Contains practice questions to prepare for weekly tutorial discussion."
+            if is_solution:
+                summary = f"Worked solutions and answer key for {course_code} ({title}). Covers step-by-step problem solutions."
+            elif "TUTORIAL" in doc_type:
+                summary = f"Tutorial exercise problems for {course_code} ({title}). Contains practice questions to prepare for tutorial classes."
             elif "LECTURE" in doc_type:
-                summary = f"Lecture slide deck for {course_code} detailing curriculum concepts and schedule."
+                summary = f"Lecture slides for {course_code} covering core curriculum theory."
             else:
                 summary = f"Academic document for {course_code} ({title})."
 
@@ -227,7 +262,7 @@ Return ONLY a JSON object:
             if wm:
                 week_number = int(wm.group(1))
 
-        # Save to DB
+        # Save to DB with raw excerpt and extracted questions
         db.upsert_parsed_document(
             doc_id=mat_id,
             course_id=mat.get("course_id", ""),
@@ -239,7 +274,10 @@ Return ONLY a JSON object:
             topic=topic or title,
             summary=summary,
             local_path=local_path,
-            schedule_data_json=json.dumps(extracted_schedule)
+            schedule_data_json=json.dumps(extracted_schedule),
+            raw_text_excerpt=raw_excerpt[:2500],
+            extracted_questions=json.dumps(questions_found),
+            is_solution=1 if is_solution else 0
         )
 
         for item in extracted_schedule:
@@ -260,9 +298,11 @@ Return ONLY a JSON object:
             "course_code": course_code,
             "title": title,
             "doc_type": doc_type,
+            "is_solution": is_solution,
             "week_number": week_number,
             "topic": topic,
             "summary": summary,
+            "questions_count": len(questions_found),
             "schedule_count": len(extracted_schedule),
             "bedrock_used": bedrock_success,
         }
@@ -272,17 +312,21 @@ Return ONLY a JSON object:
         materials = db.get_all_materials(course_code=course_code, downloaded_only=True)
         results = []
         schedules_found = 0
+        tutorials_read = 0
 
         for m in materials:
-            if any(x in (m.get("title") or "").lower() for x in ["recorded lecture", "media gallery", "zoom link"]):
+            if any(x in (m.get("title") or "").lower() for x in ["recorded lecture", "media gallery", "zoom link", ".mp4", ".mov"]):
                 continue
             res = self.analyze_document(m["id"])
             if res.get("success"):
                 results.append(res)
                 schedules_found += res.get("schedule_count", 0)
+                if "TUTORIAL" in res.get("doc_type", ""):
+                    tutorials_read += 1
 
         return {
             "documents_analyzed": len(results),
+            "tutorials_read": tutorials_read,
             "schedules_extracted": schedules_found,
             "items": results
         }
