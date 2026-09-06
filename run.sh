@@ -21,7 +21,7 @@ if [ ! -f ".env" ] && [ -f ".env.example" ]; then
     echo "[Agentic OS v2] Created .env from .env.example"
 fi
 
-echo "Starting Agentic Workday OS v2 on http://127.0.0.1:8765"
+echo "Starting CogniFlow OS on http://127.0.0.1:8765"
 if command -v open >/dev/null 2>&1; then
     open "http://127.0.0.1:8765" &
 elif command -v xdg-open >/dev/null 2>&1; then

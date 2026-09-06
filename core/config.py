@@ -15,8 +15,8 @@ if os.getenv("AWS_ACCESS_KEY_ID") and os.getenv("AWS_PROFILE") == "default":
     os.environ.pop("AWS_PROFILE", None)
 
 # Application metadata
-APP_NAME = "Agentic Workday OS v2"
-APP_VERSION = "2.0.0"
+APP_NAME = "CogniFlow OS"
+APP_VERSION = "1.0.0"
 HOST = os.getenv("HOST", "127.0.0.1")
 PORT = int(os.getenv("PORT", "8765"))
 

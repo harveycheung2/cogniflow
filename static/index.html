@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Agentic Workday OS v2 - Multi-Agent Academic & Document Intelligence</title>
+  <title>CogniFlow OS - Multi-Agent Academic & Document Intelligence</title>
+  <link rel="icon" type="image/png" href="/static/favicon.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -80,6 +81,21 @@ body {
   justify-content: center;
   border-radius: 12px;
   box-shadow: 0 0 20px rgba(0, 242, 254, 0.4);
+}
+
+
+.brand-logo-img {
+  height: 38px;
+  width: auto;
+  max-width: 250px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 10px rgba(0, 242, 254, 0.45));
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+}
+.brand-logo-img:hover {
+  transform: scale(1.02);
+  filter: drop-shadow(0 0 16px rgba(0, 242, 254, 0.75));
 }
 
 .brand h1 {
@@ -852,11 +868,9 @@ body {
     <!-- Top Navigation -->
     <header class="navbar">
       <div class="brand">
-        <div class="logo-icon">&#9881;</div>
         <div>
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <h1>Agentic Workday OS</h1>
-            <span class="badge-version">v2.0</span>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <img src="/static/logo_clean.png" alt="CogniFlow" class="brand-logo-img" />
           </div>
           <div class="subtitle">Multi-Agent Academic & Document Intelligence Engine</div>
         </div>
@@ -933,7 +947,7 @@ body {
         <div id="chat-messages" class="chat-messages">
           <div class="chat-bubble assistant">
             <div class="sender-tag">Lead Orchestrator</div>
-            <p>Welcome to <strong>Agentic Workday OS v2</strong>! I have indexed your enrolled modules, announcements, and lecture slides.</p>
+            <p>Welcome to <strong>CogniFlow OS</strong>! I have indexed your enrolled modules, announcements, and lecture slides.</p>
             <p>Ask me <em>"What is tested for MH2500?"</em>, <em>"What tutorial do I need?"</em>, or <em>"When is my next test?"</em> and I will analyze the timetable and pull out the exact PDF for you.</p>
           </div>
         </div>
