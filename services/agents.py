@@ -105,20 +105,27 @@ TOOL_DEFINITIONS = [
 ]
 
 def extract_course_from_query(query: str, history: List[Dict[str, Any]], courses: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
-    """Detects target course from query, subject keywords, or multi-turn history."""
+    """Detects target course from query, subject keywords, or multi-turn history with high accuracy."""
     if not courses:
         return None
 
-    # 1. Direct course code regex match in user query: e.g. MH2500, CC0006, SC2001
-    code_match = re.search(r'\b([A-Z]{2,4}\d{4}[A-Z]?)\b', query, re.IGNORECASE)
-    if code_match:
-        target = code_match.group(1).upper()
+    clean_map = {}
+    for c in courses:
+        raw_code = c.get("course_code", "").upper()
+        clean_map[raw_code] = c
+        m = re.search(r'\b([A-Z]{2,4}\d{4}[A-Z]?)\b', raw_code)
+        if m:
+            clean_map[m.group(1)] = c
+
+    def _resolve(code: str) -> Optional[Dict[str, Any]]:
+        target = code.upper().strip()
+        if target in clean_map:
+            return clean_map[target]
         for c in courses:
             if target in c.get("course_code", "").upper():
                 return c
+        return None
 
-    # 2. Match subject keywords in user query
-    q_lower = query.lower()
     keyword_map = {
         "probability": "MH2500",
         "prob": "MH2500",
@@ -128,28 +135,57 @@ def extract_course_from_query(query: str, history: List[Dict[str, Any]], courses
         "algorithm": "SC2001",
         "algo": "SC2001",
         "database": "SC2207",
+        "databases": "SC2207",
         "career": "ML0004",
     }
+
+    # 1. Direct course code regex match in user query: e.g. MH2500, CC0006, SC2001, SC2207
+    code_match = re.search(r'\b([A-Z]{2,4}\d{4}[A-Z]?)\b', query, re.IGNORECASE)
+    if code_match:
+        matched = _resolve(code_match.group(1))
+        if matched:
+            return matched
+
+    # 2. Match subject keywords in user query
+    q_lower = query.lower()
     for kw, code in keyword_map.items():
         if kw in q_lower:
-            for c in courses:
-                if code in c.get("course_code", "").upper():
-                    return c
+            matched = _resolve(code)
+            if matched:
+                return matched
 
-    # 3. Check recent conversation history (multi-turn memory) for course context
-    for h in reversed(history[-6:]):
-        content = h.get("content", "")
-        hist_match = re.search(r'\b([A-Z]{2,4}\d{4}[A-Z]?)\b', content, re.IGNORECASE)
-        if hist_match:
-            target = hist_match.group(1).upper()
-            for c in courses:
-                if target in c.get("course_code", "").upper():
-                    return c
-        for kw, code in keyword_map.items():
-            if kw in content.lower():
-                for c in courses:
-                    if code in c.get("course_code", "").upper():
-                        return c
+    # 3. Check recent USER messages first (newest to oldest)
+    # When a student sends a follow-up ("when is test 1?", "assignment 1 is submitted"), they follow up on their own conversational thread!
+    for h in reversed(history):
+        if h.get("role") == "user":
+            u_text = h.get("content", "")
+            u_match = re.search(r'\b([A-Z]{2,4}\d{4}[A-Z]?)\b', u_text, re.IGNORECASE)
+            if u_match:
+                matched = _resolve(u_match.group(1))
+                if matched:
+                    return matched
+            for kw, code in keyword_map.items():
+                if kw in u_text.lower():
+                    matched = _resolve(code)
+                    if matched:
+                        return matched
+
+    # 4. Check recent ASSISTANT messages (newest to oldest), prioritizing titles/headers
+    for h in reversed(history):
+        if h.get("role") == "assistant":
+            a_text = h.get("content", "")
+            # Check main markdown headers or badges first (e.g. "## SC2207", "notices for SC2207", "documents for SC2207")
+            header_match = re.search(r'(?:##\s*|Checked notices for\s*|Found \d+ documents for\s*|Target Module:\s*)\b([A-Z]{2,4}\d{4}[A-Z]?)\b', a_text, re.IGNORECASE)
+            if header_match:
+                matched = _resolve(header_match.group(1))
+                if matched:
+                    return matched
+            # Fallback to general regex in assistant message
+            a_match = re.search(r'\b([A-Z]{2,4}\d{4}[A-Z]?)\b', a_text, re.IGNORECASE)
+            if a_match:
+                matched = _resolve(a_match.group(1))
+                if matched:
+                    return matched
 
     return None
 
