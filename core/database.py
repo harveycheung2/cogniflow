@@ -1,3 +1,4 @@
+import re
 import sqlite3
 import json
 from pathlib import Path
@@ -97,6 +98,9 @@ def init_db():
             summary TEXT,
             local_path TEXT,
             schedule_data_json TEXT,
+            raw_text_excerpt TEXT,
+            extracted_questions TEXT,
+            is_solution INTEGER DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
@@ -123,7 +127,10 @@ def init_db():
             ('course_materials', 'file_size', 'INTEGER DEFAULT 0'),
             ('course_materials', 'file_name', 'TEXT'),
             ('course_materials', 'doc_type', "TEXT DEFAULT 'UNKNOWN'"),
-            ('tasks', 'term', "TEXT DEFAULT '26S1'")
+            ('tasks', 'term', "TEXT DEFAULT '26S1'"),
+            ('parsed_documents', 'raw_text_excerpt', 'TEXT'),
+            ('parsed_documents', 'extracted_questions', 'TEXT'),
+            ('parsed_documents', 'is_solution', 'INTEGER DEFAULT 0'),
         ]
         for tbl, col, col_type in columns_to_add:
             try:
@@ -180,22 +187,24 @@ def upsert_material(mat_id: str, course_id: str, title: str, content_type: str, 
         """, (mat_id, course_id, course_code, title, content_type, url, download_url, parent_id, local_path, downloaded, file_size, file_name, doc_type))
         conn.commit()
 
-def mark_material_downloaded(mat_id: str, local_path: str, file_size: int, file_name: str):
+def mark_material_downloaded(mat_id: str, local_path: str, file_size: int, file_name: str, doc_type: str = "UNKNOWN"):
     with get_connection() as conn:
         conn.execute("""
         UPDATE course_materials
-        SET local_path = ?, downloaded = 1, file_size = ?, file_name = ?
+        SET local_path = ?, downloaded = 1, file_size = ?, file_name = ?,
+            doc_type = CASE WHEN ? != 'UNKNOWN' THEN ? ELSE doc_type END
         WHERE id = ?
-        """, (local_path, file_size, file_name, mat_id))
+        """, (local_path, file_size, file_name, doc_type, doc_type, mat_id))
         conn.commit()
 
 def upsert_parsed_document(doc_id: str, course_id: str, course_code: str, title: str,
                            file_name: str, doc_type: str, week_number: int, topic: str,
-                           summary: str, local_path: str, schedule_data_json: str):
+                           summary: str, local_path: str, schedule_data_json: str,
+                           raw_text_excerpt: str = "", extracted_questions: str = "[]", is_solution: int = 0):
     with get_connection() as conn:
         conn.execute("""
-        INSERT INTO parsed_documents (id, course_id, course_code, title, file_name, doc_type, week_number, topic, summary, local_path, schedule_data_json, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        INSERT INTO parsed_documents (id, course_id, course_code, title, file_name, doc_type, week_number, topic, summary, local_path, schedule_data_json, raw_text_excerpt, extracted_questions, is_solution, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
         ON CONFLICT(id) DO UPDATE SET
             course_code=excluded.course_code,
             title=excluded.title,
@@ -206,8 +215,11 @@ def upsert_parsed_document(doc_id: str, course_id: str, course_code: str, title:
             summary=excluded.summary,
             local_path=excluded.local_path,
             schedule_data_json=excluded.schedule_data_json,
+            raw_text_excerpt=excluded.raw_text_excerpt,
+            extracted_questions=excluded.extracted_questions,
+            is_solution=excluded.is_solution,
             updated_at=CURRENT_TIMESTAMP
-        """, (doc_id, course_id, course_code, title, file_name, doc_type, week_number, topic, summary, local_path, schedule_data_json))
+        """, (doc_id, course_id, course_code, title, file_name, doc_type, week_number, topic, summary, local_path, schedule_data_json, raw_text_excerpt, extracted_questions, is_solution))
 
         conn.execute("""
         UPDATE course_materials
@@ -285,14 +297,62 @@ def get_all_materials(course_code: Optional[str] = None, downloaded_only: bool =
         rows = conn.execute(query, params).fetchall()
         return [dict(r) for r in rows]
 
-def find_matching_tutorials(course_code: Optional[str] = None, query: str = "") -> List[Dict[str, Any]]:
+def search_documents_by_content(query: str, course_code: Optional[str] = None, solution_only: Optional[bool] = None) -> List[Dict[str, Any]]:
+    """Deep full-text search across document title, extracted text, and questions with multi-keyword support."""
     with get_connection() as conn:
-        sql = """
-        SELECT m.*, p.summary, p.topic, p.week_number, p.doc_type as parsed_type
+        # Split query into meaningful words (e.g. "MS3082", "Lab", "Grouping" -> "groups", "grouping")
+        clean_words = [w.strip() for w in re.split(r'\s+', query) if len(w.strip()) >= 3]
+        if not clean_words:
+            clean_words = [query]
+
+        conditions = []
+        params = []
+        for word in clean_words:
+            w_wild = f"%{word}%"
+            conditions.append("""(
+                m.title LIKE ? OR p.topic LIKE ? OR p.summary LIKE ? OR p.raw_text_excerpt LIKE ? OR p.extracted_questions LIKE ?
+            )""")
+            params.extend([w_wild, w_wild, w_wild, w_wild, w_wild])
+
+        # If "grouping" or "group" in query, also match "groups"
+        if any("group" in w.lower() for w in clean_words):
+            conditions.append("(m.title LIKE '%group%' OR m.title LIKE '%groups%' OR p.raw_text_excerpt LIKE '%group%')")
+
+        where_clause = " OR ".join(conditions) if conditions else "1=1"
+        sql = f"""
+        SELECT m.id, m.course_code, m.title, m.doc_type, m.local_path, m.downloaded, m.file_size,
+               p.topic, p.summary, p.week_number, p.raw_text_excerpt, p.extracted_questions, p.is_solution
         FROM course_materials m
         LEFT JOIN parsed_documents p ON m.id = p.id
-        WHERE (m.title LIKE '%tutorial%' OR m.title LIKE '% tut %' OR m.title LIKE '% t1%' OR m.title LIKE '% t2%' OR m.title LIKE '% t3%'
-               OR m.doc_type LIKE '%TUTORIAL%' OR (p.doc_type IS NOT NULL AND p.doc_type LIKE '%TUTORIAL%'))
+        WHERE ({where_clause})
+        """
+
+        if course_code and course_code.upper() != "ALL":
+            sql += " AND (m.course_code LIKE ? OR p.course_code LIKE ?)"
+            params.append(f"%{course_code.upper()}%")
+            params.append(f"%{course_code.upper()}%")
+
+        if solution_only is True:
+            sql += " AND (p.is_solution = 1 OR m.title LIKE '%sol%' OR m.title LIKE '%answer%')"
+        elif solution_only is False:
+            sql += " AND (p.is_solution = 0 AND m.title NOT LIKE '%sol%' AND m.title NOT LIKE '%answer%')"
+
+        sql += " ORDER BY (CASE WHEN lower(m.title) LIKE '%group%' OR lower(m.title) LIKE '%roster%' THEN 0 ELSE 1 END), m.downloaded DESC, p.week_number ASC, m.title ASC LIMIT 15"
+        rows = conn.execute(sql, params).fetchall()
+        return [dict(r) for r in rows]
+
+def find_matching_tutorials(course_code: Optional[str] = None, query: str = "") -> List[Dict[str, Any]]:
+    """Finds tutorials with their question and solution pairs."""
+    with get_connection() as conn:
+        sql = """
+        SELECT m.*, p.summary, p.topic, p.week_number, p.is_solution, p.raw_text_excerpt, p.extracted_questions
+        FROM course_materials m
+        LEFT JOIN parsed_documents p ON m.id = p.id
+        WHERE (
+            m.title LIKE '%tutorial%' OR m.title LIKE '% tut %' OR m.title LIKE '% t1%' OR m.title LIKE '% t2%' OR m.title LIKE '% t3%'
+            OR m.title LIKE '%edx%' OR m.title LIKE '%ir %' OR m.title LIKE '%xrd%' OR m.title LIKE '%xrf%' OR m.title LIKE '%xps%'
+            OR m.doc_type LIKE '%TUTORIAL%' OR (p.doc_type IS NOT NULL AND p.doc_type LIKE '%TUTORIAL%')
+        )
         """
         params = []
         if course_code and course_code.upper() != "ALL":
@@ -300,11 +360,12 @@ def find_matching_tutorials(course_code: Optional[str] = None, query: str = "") 
             params.append(f"%{course_code.upper()}%")
             params.append(f"%{course_code.upper()}%")
         if query:
-            sql += " AND (m.title LIKE ? OR p.summary LIKE ? OR p.topic LIKE ?)"
+            sql += " AND (m.title LIKE ? OR p.summary LIKE ? OR p.topic LIKE ? OR p.raw_text_excerpt LIKE ?)"
             params.append(f"%{query}%")
             params.append(f"%{query}%")
             params.append(f"%{query}%")
-        sql += " ORDER BY m.course_code ASC, m.title ASC"
+            params.append(f"%{query}%")
+        sql += " ORDER BY m.course_code ASC, p.is_solution ASC, m.title ASC"
         rows = conn.execute(sql, params).fetchall()
         return [dict(r) for r in rows]
 
