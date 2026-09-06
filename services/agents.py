@@ -102,6 +102,55 @@ TOOL_DEFINITIONS = [
     }
 ]
 
+def extract_course_from_query(query: str, history: List[Dict[str, Any]], courses: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Detects target course from query, subject keywords, or multi-turn history."""
+    if not courses:
+        return None
+
+    # 1. Direct course code regex match in user query: e.g. MH2500, CC0006, SC2001
+    code_match = re.search(r'\b([A-Z]{2,4}\d{4}[A-Z]?)\b', query, re.IGNORECASE)
+    if code_match:
+        target = code_match.group(1).upper()
+        for c in courses:
+            if target in c.get("course_code", "").upper():
+                return c
+
+    # 2. Match subject keywords in user query
+    q_lower = query.lower()
+    keyword_map = {
+        "probability": "MH2500",
+        "prob": "MH2500",
+        "linear algebra": "MH2802",
+        "linalg": "MH2802",
+        "sustainability": "CC0006",
+        "algorithm": "SC2001",
+        "algo": "SC2001",
+        "database": "SC2207",
+        "career": "ML0004",
+    }
+    for kw, code in keyword_map.items():
+        if kw in q_lower:
+            for c in courses:
+                if code in c.get("course_code", "").upper():
+                    return c
+
+    # 3. Check recent conversation history (multi-turn memory) for course context
+    for h in reversed(history[-6:]):
+        content = h.get("content", "")
+        hist_match = re.search(r'\b([A-Z]{2,4}\d{4}[A-Z]?)\b', content, re.IGNORECASE)
+        if hist_match:
+            target = hist_match.group(1).upper()
+            for c in courses:
+                if target in c.get("course_code", "").upper():
+                    return c
+        for kw, code in keyword_map.items():
+            if kw in content.lower():
+                for c in courses:
+                    if code in c.get("course_code", "").upper():
+                        return c
+
+    return None
+
 def execute_subagent_tool(name: str, args: Dict[str, Any], term: str = "26S1") -> Dict[str, Any]:
     """Dispatches tool call directly to the requested specialist sub-agent."""
     if name == "task_document_specialist":
@@ -116,21 +165,28 @@ def execute_subagent_tool(name: str, args: Dict[str, Any], term: str = "26S1") -
         all_mats = db.get_all_materials(course_code=target_code)
 
         # Check if looking specifically for tests, exams, mock tests, or assessment
-        is_test_query = any(w in f"{task_type} {detail}".lower() for w in ["test", "exam", "quiz", "mock", "ca1", "ca2", "assessment"])
-        is_syllabus_query = any(w in f"{task_type} {detail}".lower() for w in ["syllabus", "schedule", "timetable", "outline", "hand00"])
+        combined_text = f"{task_type} {detail}".lower()
+        is_test_query = any(w in combined_text for w in ["test", "exam", "quiz", "mock", "ca1", "ca2", "assessment"])
+        is_syllabus_query = any(w in combined_text for w in ["syllabus", "schedule", "timetable", "outline", "hand00", "overview"])
 
-        if is_test_query:
-            matching_mats = [
+        matching_mats = []
+        if is_test_query or is_syllabus_query:
+            # Prioritize syllabus/schedule documents and test/mock documents together
+            syllabus_mats = [
+                m for m in all_mats
+                if any(w in m.get("title", "").lower() for w in ["hand00", "syllabus", "schedule", "outline", "overview"])
+            ]
+            test_mats = [
                 m for m in all_mats
                 if any(w in m.get("title", "").lower() for w in ["test", "mock", "exam", "quiz", "ca1", "ca2"])
             ]
-            if not matching_mats:
-                matching_mats = all_mats
-        elif is_syllabus_query:
-            matching_mats = [
-                m for m in all_mats
-                if any(w in m.get("title", "").lower() for w in ["hand00", "syllabus", "schedule", "outline", "overview", "lec 1", "lecture 1"])
-            ]
+            if is_test_query and is_syllabus_query:
+                matching_mats = syllabus_mats + test_mats
+            elif is_test_query:
+                matching_mats = test_mats + syllabus_mats
+            else:
+                matching_mats = syllabus_mats + test_mats
+
             if not matching_mats:
                 matching_mats = all_mats
         else:
@@ -145,12 +201,8 @@ def execute_subagent_tool(name: str, args: Dict[str, Any], term: str = "26S1") -
 
         schedules = db.get_course_schedules(course_code=target_code)
 
-        # Also retrieve course announcements for additional context
-        anns = db.get_announcements(term=term, limit=15)
-        course_anns = [
-            a for a in anns
-            if target_code.upper() in a.get("course_code", "").upper()
-        ]
+        # Retrieve course announcements specifically filtered by course_code
+        course_anns = db.get_announcements(term=term, course_code=target_code, limit=10)
 
         docs_summary = [
             {
@@ -164,14 +216,17 @@ def execute_subagent_tool(name: str, args: Dict[str, Any], term: str = "26S1") -
         ]
 
         finding_notes = []
-        if is_test_query and matching_mats:
+        if matching_mats:
             test_titles = [m['title'] for m in matching_mats if any(k in m['title'].lower() for k in ['test', 'mock', 'exam'])]
             if test_titles:
                 finding_notes.append(f"Identified test materials: {', '.join(test_titles[:3])}")
+            syllabus_titles = [m['title'] for m in matching_mats if any(k in m['title'].lower() for k in ['hand00', 'syllabus', 'outline', 'schedule'])]
+            if syllabus_titles:
+                finding_notes.append(f"Syllabus file: {syllabus_titles[0]}")
         
-        test_anns = [a['title'] for a in course_anns if any(k in a['title'].lower() for k in ['test', 'venue', 'quiz', 'exam'])]
+        test_anns = [a['title'] for a in course_anns if any(k in a['title'].lower() for k in ['test', 'venue', 'quiz', 'exam', 'schedule'])]
         if test_anns:
-            finding_notes.append(f"Relevant notices: {', '.join(test_anns[:2])}")
+            finding_notes.append(f"Notices: {', '.join(test_anns[:2])}")
 
         finding_str = f"Found {len(docs_summary)} matching documents for {target_code}. " + (" ".join(finding_notes) if finding_notes else f"Extracted {len(schedules)} semester milestones.")
 
@@ -182,7 +237,7 @@ def execute_subagent_tool(name: str, args: Dict[str, Any], term: str = "26S1") -
             "task_type": task_type,
             "documents_found": docs_summary,
             "schedules_extracted": schedules[:8],
-            "relevant_notices": [{"title": a["title"], "date": a.get("posted_at", "")} for a in course_anns[:3]],
+            "relevant_notices": [{"title": a["title"], "date": a.get("posted_at", "")} for a in course_anns[:4]],
             "finding": finding_str
         }
 
@@ -202,9 +257,7 @@ def execute_subagent_tool(name: str, args: Dict[str, Any], term: str = "26S1") -
 
     elif name == "task_ntulearn_specialist":
         course_code = args.get("course_code")
-        announcements = db.get_announcements(term=term, limit=10)
-        if course_code:
-            announcements = [a for a in announcements if course_code.upper() in a.get("course_code", "").upper()]
+        announcements = db.get_announcements(term=term, course_code=course_code, limit=10)
         return {
             "subagent": "NTULearn Specialist",
             "status": "completed",
@@ -245,15 +298,23 @@ def execute_chat_query(user_query: str, term: str = "26S1", session_id: str = "d
     while messages and messages[0]["role"] != "user":
         messages.pop(0)
 
+    # Resolve course target from user prompt and multi-turn context
+    matched_course = extract_course_from_query(user_query, history, courses)
+    target_course_code = matched_course["course_code"] if matched_course else (courses[0]["course_code"] if courses else "General")
+    target_course_title = matched_course.get("title") or target_course_code if matched_course else "General Studies"
+    clean_target = re.search(r'\b([A-Z]{2,4}\d{4}[A-Z]?)\b', target_course_code)
+    target_code = clean_target.group(1) if clean_target else target_course_code
+
     # Current context grounding
     current_context = f"""Current Date: {datetime.now().strftime('%d %B %Y')} (AY2026/27 Semester 1 - Week 4/5)
 Active Term: {term}
+Identified Course Target: {target_course_code} ({target_code} - {target_course_title})
 Enrolled Modules: {courses_str}
 
 Student Question: {user_query}"""
 
     if messages and messages[-1]["role"] == "user":
-        messages[-1]["content"][0]["text"] += f"\n\nFollow-up Question: {user_query}"
+        messages[-1]["content"][0]["text"] += f"\n\nTarget Module: {target_code}\nFollow-up Question: {user_query}"
     else:
         messages.append({"role": "user", "content": [{"text": current_context}]})
 
@@ -326,31 +387,111 @@ Student Question: {user_query}"""
         except Exception as e:
             final_reply = f"Bedrock tool execution error: {e}"
 
-    # If offline or fallback
+    # If offline, expired credentials, or fallback required
     if not final_reply or "Bedrock tool execution error" in final_reply:
-        # Dynamic fallback based on active courses
-        primary_course = courses[0]["course_code"] if courses else "General"
-        subagent_res = execute_subagent_tool("task_document_specialist", {"course_code": primary_course, "task_type": "general_search"}, term=term)
+        q_lower = user_query.lower()
+        is_test_query = any(w in q_lower for w in ["test", "exam", "quiz", "mock", "ca1", "ca2", "assessment"])
+        is_sched_query = any(w in q_lower for w in ["schedule", "timetable", "dates", "calendar", "timeline", "week", "outline", "syllabus"])
+
+        # Execute Document Specialist for the accurately resolved module
+        subagent_res = execute_subagent_tool(
+            "task_document_specialist",
+            {
+                "course_code": target_code,
+                "task_type": "schedule_and_tests" if (is_sched_query or is_test_query) else "general_search",
+                "detail": user_query
+            },
+            term=term
+        )
         delegation_steps.append({
             "agent": "Document Specialist Agent",
-            "action": f"Inspected course materials for {primary_course}",
-            "input": {"course_code": primary_course},
-            "result_summary": f"Found {len(subagent_res.get('documents_found', []))} materials for {primary_course}"
+            "action": f"Inspected course documents & timetable for {target_code}",
+            "input": {"course_code": target_code, "query": user_query},
+            "result_summary": subagent_res.get("finding", f"Found materials for {target_code}")
         })
-        matched_tut = subagent_res["documents_found"][0] if subagent_res.get("documents_found") else None
-        doc_token = f"[OPEN_DOC:{matched_tut['id']}:{matched_tut['title']}]" if matched_tut else ""
 
-        final_reply = f"""### 🎯 Immediate Priority: What You Need To Do
+        # Execute NTULearn Specialist for notices
+        ntulearn_res = execute_subagent_tool("task_ntulearn_specialist", {"course_code": target_code}, term=term)
+        delegation_steps.append({
+            "agent": "NTULearn Specialist",
+            "action": f"Retrieved announcements & CA notices for {target_code}",
+            "input": {"course_code": target_code},
+            "result_summary": ntulearn_res.get("finding", "")
+        })
 
-You are currently in **Week 4/5 of Semester 1 (AY2026/27)**.
+        # Gather target course tasks & materials
+        course_tasks = [t for t in db.get_tasks(term=term) if target_code in str(t.get("course_code", "")) or target_code in str(t.get("title", ""))]
+        all_course_mats = db.get_all_materials(course_code=target_code)
+        course_anns = db.get_announcements(term=term, course_code=target_code, limit=5)
 
-#### 📄 Course Materials & Documents:
-{doc_token}
+        # Categorize documents
+        syllabus_docs = [m for m in all_course_mats if any(k in m['title'].lower() for k in ['hand00', 'syllabus', 'schedule', 'outline', 'overview'])]
+        test_docs = [m for m in all_course_mats if any(k in m['title'].lower() for k in ['test', 'mock', 'exam', 'quiz'])]
+        tut_docs = [m for m in all_course_mats if any(k in m['title'].lower() for k in ['tutorial', 'tut'])]
 
-- **Active Module:** **{primary_course}**
-- **Action:** Review active lecture handouts and complete this week's tutorial questions.
+        # Primary highlight document
+        primary_doc = syllabus_docs[0] if syllabus_docs else (test_docs[0] if test_docs else (all_course_mats[0] if all_course_mats else None))
+        doc_token = f"[OPEN_DOC:{primary_doc['id']}:{primary_doc['title']}]" if primary_doc else ""
 
-Click the **Open Document** link above to inspect your materials."""
+        # Test Prep tokens
+        test_tokens = [f"[OPEN_DOC:{m['id']}:{m['title']}]" for m in test_docs[:3]]
+
+        # Construct authoritative course-specific response
+        reply_lines = [
+            f"### 📅 **{target_code}: Semester Schedule & Assessment Intelligence**",
+            f"**Module:** `{target_course_code}` ({target_course_title})",
+            f"**Current Academic Timeline:** Currently in **Week 4/5 of Semester 1 (AY2026/27)**.\n"
+        ]
+
+        if is_test_query or is_sched_query:
+            reply_lines.append("#### 📝 Upcoming Tests & Assessment Milestones:")
+            if course_tasks:
+                for t in course_tasks:
+                    reply_lines.append(f"- **Task Alert:** **{t['title']}** (Urgency Score: `{t.get('priority_score', '9.0')}`) — *Due: {t.get('due_date', 'Upcoming')}*")
+            else:
+                reply_lines.append(f"- **Upcoming Assessment:** Continuous Assessment / Test 1 scheduled during Semester 1.")
+
+            # Test announcements
+            test_notices = [a for a in course_anns if any(k in a['title'].lower() for k in ['test', 'venue', 'exam', 'quiz'])]
+            if test_notices:
+                for a in test_notices:
+                    reply_lines.append(f"- **Official Notice:** **{a['title']}** (Posted: {a.get('posted_at') or 'Recent'})")
+
+            if test_tokens:
+                reply_lines.append("\n**Test Preparation Documents & Mock Papers:**")
+                for tk in test_tokens:
+                    reply_lines.append(f"- {tk}")
+
+            reply_lines.append("\n#### 📑 Course Outline & Syllabus Document:")
+            if doc_token:
+                reply_lines.append(f"{doc_token}\n*Click above to open the official syllabus schedule, topic distribution, and grading scheme.*")
+            else:
+                reply_lines.append(f"- *Review lecture handouts and tutorial sheets in the course portal.*")
+
+            reply_lines.append("\n#### 📚 Weekly Lectures & Active Tutorials:")
+            reply_lines.append(f"- **Lecture Series:** Handouts released up to Week 4/5 (Hand01 to Hand04).")
+            if tut_docs:
+                tut_tokens = [f"[OPEN_DOC:{t['id']}:{t['title']}]" for t in tut_docs[:3]]
+                reply_lines.append(f"- **Active Problem Sets:** {' | '.join(tut_tokens)}")
+
+        else:
+            # Tutorial or general search response
+            reply_lines.append("#### 📄 Key Course Documents & Materials:")
+            if doc_token:
+                reply_lines.append(f"{doc_token}")
+            if tut_docs:
+                for td in tut_docs[:3]:
+                    reply_lines.append(f"- [OPEN_DOC:{td['id']}:{td['title']}]")
+
+            reply_lines.append("\n#### 🎯 Immediate Action Required:")
+            reply_lines.append(f"- Review active lecture materials and complete this week's assigned tutorial exercises.")
+
+        if course_anns:
+            reply_lines.append("\n#### 📢 Recent Course Announcements:")
+            for a in course_anns[:3]:
+                reply_lines.append(f"- **{a['title']}**")
+
+        final_reply = "\n".join(reply_lines)
 
     # Build visible compact Sub-Agent Delegation badges
     delegation_callout = ""

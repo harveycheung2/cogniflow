@@ -10,6 +10,7 @@ class BedrockClient:
     def __init__(self):
         self._session = None
         self._client = None
+        self._credentials_expired = False
         self._init_client()
 
     def _init_client(self):
@@ -32,7 +33,7 @@ class BedrockClient:
             self._client = None
 
     def is_ready(self) -> bool:
-        return self._client is not None
+        return self._client is not None and not self._credentials_expired
 
     def get_account_identity(self) -> Dict[str, Any]:
         if not self._session:
@@ -40,13 +41,17 @@ class BedrockClient:
         try:
             sts = self._session.client("sts", region_name=AWS_REGION)
             identity = sts.get_caller_identity()
+            self._credentials_expired = False
             return {
                 "ready": True,
                 "arn": identity.get("Arn", ""),
                 "region": AWS_REGION,
             }
         except Exception as e:
-            return {"ready": False, "error": str(e)}
+            err_str = str(e)
+            if "ExpiredToken" in err_str:
+                self._credentials_expired = True
+            return {"ready": False, "error": err_str}
 
     def converse(
         self,
