@@ -15,15 +15,30 @@ class BedrockClient:
         self.reload_client()
 
     def reload_client(self):
-        """Reload credentials from .env in case user updated session token."""
+        """Reload credentials from AWS SSO profile or .env in case user updated session token."""
         if ENV_FILE.exists():
             load_dotenv(ENV_FILE, override=True)
 
+        profile = os.getenv("AWS_PROFILE", "hack2026").strip()
+        region = os.getenv("AWS_REGION", "us-east-1").strip() or "us-east-1"
         ak = os.getenv("AWS_ACCESS_KEY_ID", "").strip()
         sk = os.getenv("AWS_SECRET_ACCESS_KEY", "").strip()
         st = os.getenv("AWS_SESSION_TOKEN", "").strip()
-        region = os.getenv("AWS_REGION", "us-east-1").strip() or "us-east-1"
 
+        # 1. Check AWS SSO Profile first (e.g. hack2026)
+        if profile and profile != "default":
+            try:
+                sess = boto3.Session(profile_name=profile, region_name=region)
+                sts = sess.client("sts", region_name=region)
+                sts.get_caller_identity()
+                self._session = sess
+                self._client = self._session.client("bedrock-runtime", region_name=region)
+                self._credentials_expired = False
+                return
+            except Exception:
+                pass
+
+        # 2. Fall back to static access keys from .env
         if not ak or not sk:
             self._client = None
             return
