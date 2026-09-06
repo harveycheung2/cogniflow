@@ -14,28 +14,30 @@ class BedrockClient:
         self.reload_client()
 
     def reload_client(self):
-        """Reload credentials from AWS SSO profile or .env."""
+        """Reload credentials from AWS SSO profile (hackathon/hack2026) or .env."""
         if ENV_FILE.exists():
             load_dotenv(ENV_FILE, override=True)
 
-        profile = os.getenv("AWS_PROFILE", "hackathon").strip()
+        profile = os.getenv("AWS_PROFILE", "").strip()
         region = os.getenv("AWS_REGION", "us-east-1").strip() or "us-east-1"
         ak = os.getenv("AWS_ACCESS_KEY_ID", "").strip()
         sk = os.getenv("AWS_SECRET_ACCESS_KEY", "").strip()
         st = os.getenv("AWS_SESSION_TOKEN", "").strip()
 
-        # 1. First priority: AWS SSO Profile (hackathon or configured profile)
-        if profile:
+        # 1. Try SSO profiles (configured profile, hackathon, or hack2026)
+        profiles_to_try = [p for p in [profile, "hackathon", "hack2026", "default"] if p and p != "none"]
+        for prof in profiles_to_try:
             try:
-                self._session = boto3.Session(profile_name=profile, region_name=region)
-                self._client = self._session.client("bedrock-runtime", region_name=region)
-                self._last_token = profile
+                sess = boto3.Session(profile_name=prof, region_name=region)
+                client = sess.client("bedrock-runtime", region_name=region)
+                self._session = sess
+                self._client = client
+                self._last_token = prof
                 return
-            except Exception as e:
-                # If profile fails, continue to fallback
-                pass
+            except Exception:
+                continue
 
-        # 2. Fallback to explicit access keys if provided
+        # 2. Fall back to explicit access keys if provided
         if ak and sk:
             try:
                 self._session = boto3.Session(
@@ -54,9 +56,9 @@ class BedrockClient:
         self._client = None
 
     def is_ready(self) -> bool:
-        # Check if .env changed
         curr_st = os.getenv("AWS_SESSION_TOKEN", "").strip()
-        if curr_st != self._last_token:
+        curr_prof = os.getenv("AWS_PROFILE", "").strip()
+        if curr_st != self._last_token and curr_prof != self._last_token:
             self.reload_client()
         return self._client is not None
 
@@ -75,43 +77,6 @@ class BedrockClient:
                 "user_id": identity.get("UserId", "Unknown User"),
             }
         except Exception as e:
-            return {"ready": False, "error": f"STS Authentication failed: {str(e)}"}
-
-    def converse(
-        self,
-        messages: List[Dict[str, Any]],
-        system_prompt: Optional[str] = None,
-        model_id: str = "anthropic.claude-3-5-sonnet-20240620-v1:0",
-        max_tokens: int = 1500,
-        temperature: float = 0.2
-    ) -> str:
-        if not self.is_ready():
-            raise RuntimeError("Bedrock Client not configured.")
-
-        system_config = [{"text": system_prompt}] if system_prompt else []
-        formatted_messages = []
-        for m in messages:
-            content = m.get("content", "")
-            if isinstance(content, str):
-                formatted_messages.append({"role": m["role"], "content": [{"text": content}]})
-            else:
-                formatted_messages.append(m)
-
-        try:
-            response = self._client.converse(
-                modelId=model_id,
-                messages=formatted_messages,
-                system=system_config,
-                inferenceConfig={"maxTokens": max_tokens, "temperature": temperature}
-            )
-            output = response.get("output", {}).get("message", {}).get("content", [])
-            for block in output:
-                if "text" in block:
-                    return block["text"]
-            return ""
-        except Exception as e:
-            if "ExpiredToken" in str(e):
-                self.reload_client()
-            raise e
+            return {"ready": False, "error": f"STS Authentication failed: {e}"}
 
 bedrock_client = BedrockClient()

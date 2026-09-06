@@ -3,7 +3,10 @@ import re
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 from datetime import datetime
-import pdfplumber
+try:
+    import pdfplumber
+except ImportError:
+    pdfplumber = None
 
 import core.database as db
 from core.config import BASE_DIR

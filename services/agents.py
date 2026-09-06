@@ -13,23 +13,21 @@ LEAD_SYSTEM_PROMPT = """You are the Lead Orchestrator of Agentic Workday OS v2.
 You supervise multiple specialized sub-agents to organize the student's academic life for Semester 1 (26S1).
 
 Available Sub-Agents to Delegate to:
-1. `task_document_specialist`: Inspects course slides, searches tutorial documents, extracts semester schedules, and retrieves specific PDF materials or test/exam information. Pass both `course_code` (e.g. 'MS3014', 'BS1016', 'MS3082', 'MS3013') and `detail` (e.g. 'EDX', 'corrosion', 'skin', 'Tutorial 1', 'GROUP') so it can deeply search into document contents, questions, solutions, and rosters.
+1. `task_document_specialist`: Inspects course slides, searches tutorial documents, extracts semester schedules, and retrieves specific PDF materials or test/exam information. Pass both `course_code` (e.g. 'MH2500', 'SC2001', 'SC2207', 'MH2802', 'CC0006') and `detail` (e.g. 'schedule', 'test', 'mock', 'Tutorial 1', 'syllabus') so it can deeply search document contents, questions, solutions, and milestones.
 2. `task_planner_agent`: Generates optimized time-blocked study schedules and calculates urgency priority scores.
-3. `task_ntulearn_specialist`: Checks and reads the full text bodies of announcements, lab groupings, CA deadlines, test venues, and course notices.
+3. `task_ntulearn_specialist`: Checks and reads the full text bodies of announcements, deadlines, test venues, and course notices.
 
 Guidelines:
-- **Conversation Context Preservation**: Always remember context across conversation turns. If the student previously asked about a specific module (e.g., MS3014 or MS3082) and then follows up with questions like "what is tested?", "when is it?", or "give me practice problems", automatically relate the query to the course being discussed without asking for re-clarification.
-- **Sub-Agent Delegation**: Whenever the student asks "what do I need to do", "which tutorial do I need", "find tutorial", or asks about course content/schedules/tests/groupings, ALWAYS task `task_document_specialist` and/or `task_ntulearn_specialist` to inspect the actual course documents and notices first.
-- **Announcements & Groupings**: When asked about lab groupings, time slots, exam dates, or notices, ALWAYS delegate to `task_ntulearn_specialist` and READ THE FULL ANNOUNCEMENT BODY. If an announcement refers to an uploaded document (such as `MS3082_GROUPS_AY2026_S1.pdf`), also task `task_document_specialist` to inspect that document to identify the student's exact group number and TA! Never tell the student "go check Blackboard yourself" when the announcement body and documents are available in your database. Extract and quote the actual text, time slots, and instructions!
-- **Document Citing**: Clearly distinguish between Question sheets (for practicing) and Solution sheets (with answers). ALWAYS include the clickable action token:
+- **Conversation Context Preservation & Course Accuracy**: Always remember context across conversation turns. Ensure tool calls always use the specific course code (e.g., MH2500) asked about in the prompt. Never substitute with an unrelated course (like CC0006) when the student asked about a different module.
+- **Sub-Agent Delegation**: Whenever the student asks "what do I need to do", "which tutorial do I need", "find tutorial", or asks about course content/schedules/tests, ALWAYS task `task_document_specialist` and/or `task_ntulearn_specialist` to inspect the actual course documents and notices first.
+- **Announcements & Notices**: When asked about test venues, deadlines, or schedules, ALWAYS delegate to `task_ntulearn_specialist` and check the announcement notices and bodies. Extract and quote the actual dates, venues, and instructions!
+- **Document Citing**: Clearly distinguish between Question sheets, Solution hints, Mock test papers, and Syllabus documents. ALWAYS include the clickable action token:
   `[OPEN_DOC:<material_id>:<Document Title>]`
   This allows the student to click directly in the chat to open and view the PDF in the application!
-- **Question Citing**: Cite the specific questions extracted from the document so the student knows what problems to solve.
 - **Response Structure**:
-  - 🎯 **Summary & What to do now**
-  - 📄 **Exact Tutorial PDF Required & Action Links** (include both Question Sheet and Solution Sheet if available)
-  - ❓ **Key Practice Questions Covered**
-  - 📅 **Semester Schedule & Due Dates**
+  - 🎯 **Summary & Immediate Priorities**
+  - 📄 **Exact Tutorial / Test / Syllabus PDFs Required & Action Links**
+  - 📅 **Semester Schedule & Milestones**
   - 💡 **Recommended Next Step**
 - Professional, encouraging, and clear executive tone.
 """
@@ -38,14 +36,14 @@ TOOL_DEFINITIONS = [
     {
         "toolSpec": {
             "name": "task_document_specialist",
-            "description": "Task the Document Specialist Sub-Agent to deeply inspect, analyze, or search course documents, lecture slides, syllabus timetables, and tutorial question/solution sheets for a course. Searches inside the document text, extracted questions, and rosters.",
+            "description": "Task the Document Specialist Sub-Agent to deeply inspect, analyze, or search course documents, lecture slides, syllabus timetables, and tutorial question/solution sheets for a course. Searches inside document text, extracted questions, and rosters.",
             "inputSchema": {
                 "json": {
                     "type": "object",
                     "properties": {
                         "course_code": {
                             "type": "string",
-                            "description": "Course code or keyword, e.g. 'MS3014', 'BS1016', 'MS3013', 'MS3011', 'MS3012', 'MS3082', 'HW0288'"
+                            "description": "Course code or keyword, e.g. 'MH2500', 'SC2001', 'SC2207', 'MH2802', 'CC0006', 'ML0004'"
                         },
                         "task_type": {
                             "type": "string",
@@ -54,7 +52,7 @@ TOOL_DEFINITIONS = [
                         },
                         "detail": {
                             "type": "string",
-                            "description": "Topic, keyword, or specific tutorial/test name to search within the text/questions, e.g. 'EDX', 'corrosion', 'skin', 'Tutorial 1', 'SEM', 'GROUP'"
+                            "description": "Topic, keyword, or specific tutorial/test name to search within the text/questions, e.g. 'schedule', 'test', 'mock', 'Tutorial 1', 'probability'"
                         }
                     },
                     "required": ["task_type"]
@@ -97,7 +95,7 @@ TOOL_DEFINITIONS = [
                         },
                         "query": {
                             "type": "string",
-                            "description": "Search topic e.g. 'quiz', 'lab', 'group', 'exam', 'slot'"
+                            "description": "Search topic e.g. 'quiz', 'test', 'venue', 'exam', 'slot', 'schedule'"
                         }
                     }
                 }
@@ -106,6 +104,55 @@ TOOL_DEFINITIONS = [
     }
 ]
 
+def extract_course_from_query(query: str, history: List[Dict[str, Any]], courses: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Detects target course from query, subject keywords, or multi-turn history."""
+    if not courses:
+        return None
+
+    # 1. Direct course code regex match in user query: e.g. MH2500, CC0006, SC2001
+    code_match = re.search(r'\b([A-Z]{2,4}\d{4}[A-Z]?)\b', query, re.IGNORECASE)
+    if code_match:
+        target = code_match.group(1).upper()
+        for c in courses:
+            if target in c.get("course_code", "").upper():
+                return c
+
+    # 2. Match subject keywords in user query
+    q_lower = query.lower()
+    keyword_map = {
+        "probability": "MH2500",
+        "prob": "MH2500",
+        "linear algebra": "MH2802",
+        "linalg": "MH2802",
+        "sustainability": "CC0006",
+        "algorithm": "SC2001",
+        "algo": "SC2001",
+        "database": "SC2207",
+        "career": "ML0004",
+    }
+    for kw, code in keyword_map.items():
+        if kw in q_lower:
+            for c in courses:
+                if code in c.get("course_code", "").upper():
+                    return c
+
+    # 3. Check recent conversation history (multi-turn memory) for course context
+    for h in reversed(history[-6:]):
+        content = h.get("content", "")
+        hist_match = re.search(r'\b([A-Z]{2,4}\d{4}[A-Z]?)\b', content, re.IGNORECASE)
+        if hist_match:
+            target = hist_match.group(1).upper()
+            for c in courses:
+                if target in c.get("course_code", "").upper():
+                    return c
+        for kw, code in keyword_map.items():
+            if kw in content.lower():
+                for c in courses:
+                    if code in c.get("course_code", "").upper():
+                        return c
+
+    return None
+
 def execute_subagent_tool(name: str, args: Dict[str, Any], term: str = "26S1") -> Dict[str, Any]:
     """Dispatches tool call directly to the requested specialist sub-agent."""
     if name == "task_document_specialist":
@@ -113,45 +160,53 @@ def execute_subagent_tool(name: str, args: Dict[str, Any], term: str = "26S1") -
         task_type = args.get("task_type", "general_search")
         detail = args.get("detail", "")
 
-        # Clean course code (e.g. MS3082 from 26S1-MS3082-C-LAB)
+        # Clean course code (e.g. MH2500 from 26S1-MH2500-LEC)
         cm = re.search(r'\b([A-Z]{2,4}\d{4}[A-Z]?)\b', raw_code, re.IGNORECASE)
         course_code = cm.group(1).upper() if cm else raw_code
 
         matching_mats = []
-        # 1. Search by content if detail is given
-        if detail:
+        if detail and hasattr(db, "search_documents_by_content"):
             matching_mats = db.search_documents_by_content(query=detail, course_code=course_code)
 
-        # 2. Check if looking specifically for tests, exams, mock tests, or assessment
-        is_test_query = any(w in f"{task_type} {detail}".lower() for w in ["test", "exam", "quiz", "mock", "ca1", "ca2", "assessment"])
-        is_syllabus_query = any(w in f"{task_type} {detail}".lower() for w in ["syllabus", "schedule", "timetable", "outline", "hand00"])
+        combined_text = f"{task_type} {detail}".lower()
+        is_test_query = any(w in combined_text for w in ["test", "exam", "quiz", "mock", "ca1", "ca2", "assessment"])
+        is_syllabus_query = any(w in combined_text for w in ["syllabus", "schedule", "timetable", "outline", "hand00", "overview"])
 
-        if is_test_query and not matching_mats:
-            all_mats = db.get_all_materials(course_code=course_code)
-            matching_mats = [
+        all_mats = db.get_all_materials(course_code=course_code)
+
+        if (is_test_query or is_syllabus_query) and not matching_mats:
+            syllabus_mats = [
+                m for m in all_mats
+                if any(w in m.get("title", "").lower() for w in ["hand00", "syllabus", "schedule", "outline", "overview"])
+            ]
+            test_mats = [
                 m for m in all_mats
                 if any(w in m.get("title", "").lower() for w in ["test", "mock", "exam", "quiz", "ca1", "ca2"])
             ]
+            if is_test_query and is_syllabus_query:
+                matching_mats = syllabus_mats + test_mats
+            elif is_test_query:
+                matching_mats = test_mats + syllabus_mats
+            else:
+                matching_mats = syllabus_mats + test_mats
 
-        # 3. Fall back to matching tutorials if needed
+        # Fall back to matching tutorials if needed
         if not matching_mats:
             matching_mats = db.find_matching_tutorials(course_code=course_code, query=detail)
 
-        # 4. Fall back to general course materials
-        if not matching_mats and course_code:
-            matching_mats = db.get_all_materials(course_code=course_code)
+        # Fall back to general course materials
+        if not matching_mats:
+            matching_mats = all_mats
 
-        # 5. Ensure documents are parsed deeply (capped to 2 to conserve AWS tokens)
+        # Deep parse top documents (capped to 2 to conserve AWS tokens)
         for m in matching_mats[:2]:
             if not m.get("raw_text_excerpt"):
                 document_agent.analyze_document(m["id"])
 
         schedules = db.get_course_schedules(course_code=course_code)
-        course_anns = db.get_announcements(term=term, limit=6)
-        if course_code:
-            course_anns = [a for a in course_anns if course_code.upper() in a.get("course_code", "").upper()]
+        course_anns = db.get_announcements(term=term, course_code=course_code, limit=10)
 
-        # 6. Format detailed results with question lists & solution indicators
+        # Categorize documents
         question_sheets = []
         solution_sheets = []
         other_docs = []
@@ -184,9 +239,20 @@ def execute_subagent_tool(name: str, args: Dict[str, Any], term: str = "26S1") -
             else:
                 other_docs.append(doc_entry)
 
-        finding_str = f"Inspected documents for {course_code or 'enrolled courses'}. Found {len(question_sheets)} question sheets, {len(solution_sheets)} solution sheets, and {len(other_docs)} reference materials."
-        if schedules:
-            finding_str += f" Extracted {len(schedules)} semester schedule milestones."
+        finding_notes = []
+        if matching_mats:
+            test_titles = [m['title'] for m in matching_mats if any(k in m['title'].lower() for k in ['test', 'mock', 'exam'])]
+            if test_titles:
+                finding_notes.append(f"Test materials: {', '.join(test_titles[:3])}")
+            syllabus_titles = [m['title'] for m in matching_mats if any(k in m['title'].lower() for k in ['hand00', 'syllabus', 'outline', 'schedule'])]
+            if syllabus_titles:
+                finding_notes.append(f"Syllabus file: {syllabus_titles[0]}")
+        
+        test_anns = [a['title'] for a in course_anns if any(k in a['title'].lower() for k in ['test', 'venue', 'quiz', 'exam', 'schedule'])]
+        if test_anns:
+            finding_notes.append(f"Notices: {', '.join(test_anns[:2])}")
+
+        finding_str = f"Found {len(matching_mats)} documents for {course_code}. " + (" ".join(finding_notes) if finding_notes else f"Extracted {len(schedules)} semester milestones.")
 
         return {
             "subagent": "Document Specialist Agent",
@@ -197,8 +263,9 @@ def execute_subagent_tool(name: str, args: Dict[str, Any], term: str = "26S1") -
             "question_sheets_found": question_sheets,
             "solution_sheets_found": solution_sheets,
             "other_documents": other_docs[:10],
+            "documents_found": matching_mats[:8],
             "schedules_extracted": schedules[:8],
-            "relevant_notices": [{"title": a["title"], "date": a.get("posted_at", "")} for a in course_anns[:3]],
+            "relevant_notices": [{"title": a["title"], "date": a.get("posted_at", "")} for a in course_anns[:4]],
             "finding": finding_str
         }
 
@@ -218,11 +285,7 @@ def execute_subagent_tool(name: str, args: Dict[str, Any], term: str = "26S1") -
     elif name == "task_ntulearn_specialist":
         raw_code = args.get("course_code")
         query = args.get("query")
-        announcements = db.get_announcements(term=term, limit=15)
-        if raw_code:
-            cm = re.search(r'\b([A-Z]{2,4}\d{4}[A-Z]?)\b', raw_code, re.IGNORECASE)
-            c_target = cm.group(1).upper() if cm else raw_code.upper()
-            announcements = [a for a in announcements if c_target in a.get("course_code", "").upper()]
+        announcements = db.get_announcements(term=term, course_code=raw_code, limit=15)
         if query:
             q_lower = query.lower()
             announcements = [a for a in announcements if q_lower in (a.get("title") or "").lower() or q_lower in (a.get("body") or "").lower()]
@@ -250,22 +313,37 @@ def execute_subagent_tool(name: str, args: Dict[str, Any], term: str = "26S1") -
 
 def execute_chat_query(user_query: str, term: str = "26S1", session_id: str = "default") -> Dict[str, Any]:
     courses = db.get_all_courses(term=term)
-    courses_str = ", ".join([f"{c['course_code']} ({c['title']})" for c in courses])
+    courses_str = ", ".join([f"{c['course_code']} ({c.get('title') or c['course_code']})" for c in courses])
 
-    # Fetch recent conversation history for context preservation
-    chat_history = db.get_chat_history(session_id=session_id, limit=6)
-    history_context = ""
-    if chat_history:
-        history_lines = []
-        for h in chat_history[-4:]:
-            role_label = "Student" if h.get("role") == "user" else "Assistant"
-            clean_text = re.sub(r'<[^>]+>', '', h.get("content", ""))
-            clean_text = re.sub(r'\s+', ' ', clean_text).strip()
-            history_lines.append(f"{role_label}: {clean_text[:180]}")
-        history_context = "\nRecent Conversation History:\n" + "\n".join(history_lines) + "\n"
+    # ── Multi-turn history retrieval ──────────────────────────────────────────
+    history = db.get_chat_history(session_id=session_id, limit=8)
+    messages: List[Dict[str, Any]] = []
+
+    for h in history:
+        r = h.get("role", "user")
+        txt = h.get("content", "").strip()
+        txt = re.sub(r'<div class="subagent-[^"]*">.*?</div>', '', txt, flags=re.DOTALL)
+        txt = re.sub(r'<[^>]+>', '', txt).strip()
+        if not txt:
+            continue
+
+        if messages and messages[-1]["role"] == r:
+            messages[-1]["content"][0]["text"] += f"\n\n{txt}"
+        else:
+            messages.append({"role": r, "content": [{"text": txt}]})
+
+    while messages and messages[0]["role"] != "user":
+        messages.pop(0)
+
+    # Resolve course target from user prompt and multi-turn context
+    matched_course = extract_course_from_query(user_query, history, courses)
+    target_course_code = matched_course["course_code"] if matched_course else (courses[0]["course_code"] if courses else "General")
+    target_course_title = matched_course.get("title") or target_course_code if matched_course else "General Studies"
+    clean_target = re.search(r'\b([A-Z]{2,4}\d{4}[A-Z]?)\b', target_course_code)
+    target_code = clean_target.group(1) if clean_target else target_course_code
 
     # Active Timetable Context
-    active_tt = db.get_active_timetable(term=term)
+    active_tt = getattr(db, "get_active_timetable", lambda term: None)(term=term) if hasattr(db, "get_active_timetable") else None
     tt_summary = ""
     if active_tt and active_tt.get("parsed_data"):
         pdata = active_tt["parsed_data"]
@@ -276,15 +354,18 @@ def execute_chat_query(user_query: str, term: str = "26S1", session_id: str = "d
         exams_text = "; ".join(exams_list)
         tt_summary = f"\nStudent Profile: {sname}\nOfficial Timetable Weekly Slots: {slots_text}\nOfficial Final Exam Dates: {exams_text}\n"
 
-    initial_context = f"""Current Date: {datetime.now().strftime('%d %B %Y')} (AY2026/27 Semester 1 - Week 4/5)
+    # Current context grounding
+    current_context = f"""Current Date: {datetime.now().strftime('%d %B %Y')} (AY2026/27 Semester 1 - Week 4/5)
+Active Term: {term}
+Identified Course Target: {target_course_code} ({target_code} - {target_course_title})
 Enrolled Modules: {courses_str}
-{tt_summary}{history_context}
-Student Question: {user_query}
-"""
+{tt_summary}
+Student Question: {user_query}"""
 
-    messages = [
-        {"role": "user", "content": [{"text": initial_context}]}
-    ]
+    if messages and messages[-1]["role"] == "user":
+        messages[-1]["content"][0]["text"] += f"\n\nTarget Module: {target_code}\nFollow-up Question: {user_query}"
+    else:
+        messages.append({"role": "user", "content": [{"text": current_context}]})
 
     delegation_steps = []
     final_reply = ""
@@ -293,7 +374,7 @@ Student Question: {user_query}
     if bedrock_client.is_ready():
         try:
             tool_config = {"tools": TOOL_DEFINITIONS}
-            max_turns = 4
+            max_turns = 3
             turn = 0
 
             while turn < max_turns:
@@ -303,7 +384,7 @@ Student Question: {user_query}
                     messages=messages,
                     system=[{"text": LEAD_SYSTEM_PROMPT}],
                     toolConfig=tool_config,
-                    inferenceConfig={"maxTokens": 1200, "temperature": 0.2}
+                    inferenceConfig={"maxTokens": 1000, "temperature": 0.2}
                 )
 
                 output_msg = resp.get("output", {}).get("message", {})
@@ -312,7 +393,6 @@ Student Question: {user_query}
                 stop_reason = resp.get("stopReason")
                 content_blocks = output_msg.get("content", [])
 
-                # Check if tool was called
                 if stop_reason == "tool_use":
                     tool_result_contents = []
 
@@ -323,13 +403,12 @@ Student Question: {user_query}
                             t_name = t_use["name"]
                             t_input = t_use.get("input", {})
 
-                            # Execute subagent
                             subagent_out = execute_subagent_tool(t_name, t_input, term=term)
                             delegation_steps.append({
                                 "agent": subagent_out.get("subagent", t_name),
                                 "action": f"Delegated to {t_name}",
                                 "input": t_input,
-                                "result_summary": subagent_out.get("finding") or str(subagent_out)[:160]
+                                "result_summary": subagent_out.get("finding") or str(subagent_out)[:140]
                             })
 
                             tool_result_contents.append({
@@ -340,230 +419,124 @@ Student Question: {user_query}
                                 }
                             })
 
-                    # Send tool result back to Lead Agent
                     messages.append({
                         "role": "user",
                         "content": tool_result_contents
                     })
                 else:
-                    # Model provided final text
                     for block in content_blocks:
                         if "text" in block:
                             final_reply += block["text"]
                     break
 
         except Exception as e:
-            final_reply = ""
+            final_reply = f"Bedrock tool execution error: {e}"
 
-    # Smart Dynamic Fallback if Bedrock is temporarily offline/expired
-    if not final_reply:
-        # 1. Detect course code from query or recent history
-        detected_course = ""
-        cm = re.search(r'\b(MS3011|MS3012|MS3013|MS3014|MS3082|BS1016|HW0288|MH2500)\b', user_query, re.IGNORECASE)
-        if cm:
-            detected_course = cm.group(1).upper()
-        elif chat_history:
-            for h in reversed(chat_history[-4:]):
-                hm = re.search(r'\b(MS3011|MS3012|MS3013|MS3014|MS3082|BS1016|HW0288|MH2500)\b', h.get("content", ""), re.IGNORECASE)
-                if hm:
-                    detected_course = hm.group(1).upper()
-                    break
+    # If offline, expired credentials, or fallback required
+    if not final_reply or "Bedrock tool execution error" in final_reply:
+        q_lower = user_query.lower()
+        is_test_query = any(w in q_lower for w in ["test", "exam", "quiz", "mock", "ca1", "ca2", "assessment"])
+        is_sched_query = any(w in q_lower for w in ["schedule", "timetable", "dates", "calendar", "timeline", "week", "outline", "syllabus"])
 
-        # 2. Detect topic keywords
-        detected_topic = ""
-        specific_topics = re.findall(r'\b(EDX|SEM|XRD|XPS|XRF|FTIR|UV-VIS|corrosion|skin|heart|respiration|kinetics|overpotential|IR|group|roster|slot|ca1|briefing)\b', user_query, re.IGNORECASE)
-        if specific_topics:
-            detected_topic = specific_topics[0]
+        # Execute Document Specialist for the accurately resolved module
+        subagent_res = execute_subagent_tool(
+            "task_document_specialist",
+            {
+                "course_code": target_code,
+                "task_type": "schedule_and_tests" if (is_sched_query or is_test_query) else "general_search",
+                "detail": user_query
+            },
+            term=term
+        )
+        delegation_steps.append({
+            "agent": "Document Specialist Agent",
+            "action": f"Inspected course documents & timetable for {target_code}",
+            "input": {"course_code": target_code, "query": user_query},
+            "result_summary": subagent_res.get("finding", f"Found materials for {target_code}")
+        })
+
+        # Execute NTULearn Specialist for notices
+        ntulearn_res = execute_subagent_tool("task_ntulearn_specialist", {"course_code": target_code}, term=term)
+        delegation_steps.append({
+            "agent": "NTULearn Specialist",
+            "action": f"Retrieved announcements & CA notices for {target_code}",
+            "input": {"course_code": target_code},
+            "result_summary": ntulearn_res.get("finding", "")
+        })
+
+        # Gather target course tasks & materials
+        course_tasks = [t for t in db.get_tasks(term=term) if target_code in str(t.get("course_code", "")) or target_code in str(t.get("title", ""))]
+        all_course_mats = db.get_all_materials(course_code=target_code)
+        course_anns = db.get_announcements(term=term, course_code=target_code, limit=5)
+
+        # Categorize documents
+        syllabus_docs = [m for m in all_course_mats if any(k in m['title'].lower() for k in ['hand00', 'syllabus', 'schedule', 'outline', 'overview'])]
+        test_docs = [m for m in all_course_mats if any(k in m['title'].lower() for k in ['test', 'mock', 'exam', 'quiz'])]
+        tut_docs = [m for m in all_course_mats if any(k in m['title'].lower() for k in ['tutorial', 'tut'])]
+
+        # Primary highlight document
+        primary_doc = syllabus_docs[0] if syllabus_docs else (test_docs[0] if test_docs else (all_course_mats[0] if all_course_mats else None))
+        doc_token = f"[OPEN_DOC:{primary_doc['id']}:{primary_doc['title']}]" if primary_doc else ""
+
+        # Test Prep tokens
+        test_tokens = [f"[OPEN_DOC:{m['id']}:{m['title']}]" for m in test_docs[:3]]
+
+        # Construct authoritative course-specific response
+        reply_lines = [
+            f"### 📅 **{target_code}: Semester Schedule & Assessment Intelligence**",
+            f"**Module:** `{target_course_code}` ({target_course_title})",
+            f"**Current Academic Timeline:** Currently in **Week 4/5 of Semester 1 (AY2026/27)**.\n"
+        ]
+
+        if is_test_query or is_sched_query:
+            reply_lines.append("#### 📝 Upcoming Tests & Assessment Milestones:")
+            if course_tasks:
+                for t in course_tasks:
+                    reply_lines.append(f"- **Task Alert:** **{t['title']}** (Urgency Score: `{t.get('priority_score', '9.0')}`) — *Due: {t.get('due_date', 'Upcoming')}*")
+            else:
+                reply_lines.append(f"- **Upcoming Assessment:** Continuous Assessment / Test 1 scheduled during Semester 1.")
+
+            # Test announcements
+            test_notices = [a for a in course_anns if any(k in a['title'].lower() for k in ['test', 'venue', 'exam', 'quiz'])]
+            if test_notices:
+                for a in test_notices:
+                    reply_lines.append(f"- **Official Notice:** **{a['title']}** (Posted: {a.get('posted_at') or 'Recent'})")
+
+            if test_tokens:
+                reply_lines.append("\n**Test Preparation Documents & Mock Papers:**")
+                for tk in test_tokens:
+                    reply_lines.append(f"- {tk}")
+
+            reply_lines.append("\n#### 📑 Course Outline & Syllabus Document:")
+            if doc_token:
+                reply_lines.append(f"{doc_token}\n*Click above to open the official syllabus schedule, topic distribution, and grading scheme.*")
+            else:
+                reply_lines.append(f"- *Review lecture handouts and tutorial sheets in the course portal.*")
+
+            reply_lines.append("\n#### 📚 Weekly Lectures & Active Tutorials:")
+            reply_lines.append(f"- **Lecture Series:** Handouts released up to Week 4/5 (Hand01 to Hand04).")
+            if tut_docs:
+                tut_tokens = [f"[OPEN_DOC:{t['id']}:{t['title']}]" for t in tut_docs[:3]]
+                reply_lines.append(f"- **Active Problem Sets:** {' | '.join(tut_tokens)}")
+
         else:
-            generic_topics = re.findall(r'\b(tutorial\s*\d*|sol\w*|lab|lecture|quiz|exam|test)\b', user_query, re.IGNORECASE)
-            if generic_topics:
-                detected_topic = generic_topics[0]
+            # Tutorial or general search response
+            reply_lines.append("#### 📄 Key Course Documents & Materials:")
+            if doc_token:
+                reply_lines.append(f"{doc_token}")
+            if tut_docs:
+                for td in tut_docs[:3]:
+                    reply_lines.append(f"- [OPEN_DOC:{td['id']}:{td['title']}]")
 
-                # Check if user is asking about timetable, class schedule, venues, or exam dates
-        is_tt_query = any(k in user_query.lower() for k in ["timetable", "class", "classes", "venue", "lecture", "tutorial", "lab slot", "when is my", "where is my", "schedule", "exam date", "exams", "finals"])
-        active_tt = db.get_active_timetable(term=term)
+            reply_lines.append("\n#### 🎯 Immediate Action Required:")
+            reply_lines.append(f"- Review active lecture materials and complete this week's assigned tutorial exercises.")
 
-        if is_tt_query and active_tt and active_tt.get("parsed_data"):
-            pdata = active_tt["parsed_data"]
-            student_name = pdata.get("student_name", "Student")
-            all_slots = pdata.get("weekly_slots", [])
-            all_courses = pdata.get("courses", [])
+        if course_anns:
+            reply_lines.append("\n#### 📢 Recent Course Announcements:")
+            for a in course_anns[:3]:
+                reply_lines.append(f"- **{a['title']}**")
 
-            delegation_steps.append({
-                "agent": "Timetable & Schedule Specialist Sub-Agent",
-                "action": f"Queried official STARS timetable for {student_name} ({term})",
-                "input": {"query": user_query},
-                "result_summary": f"Found {len(all_slots)} weekly class slots across 5 days and {len(all_courses)} registered modules."
-            })
-
-            # Check if specific day is queried
-            day_matches = {
-                "monday": "MON", "mon": "MON",
-                "tuesday": "TUE", "tue": "TUE",
-                "wednesday": "WED", "wed": "WED",
-                "thursday": "THU", "thu": "THU",
-                "friday": "FRI", "fri": "FRI"
-            }
-            target_day = None
-            for d_name, d_code in day_matches.items():
-                if d_name in user_query.lower():
-                    target_day = d_code
-                    break
-
-            # Filter slots
-            if target_day:
-                matched_slots = [s for s in all_slots if s.get("day") == target_day]
-                header_title = f"### 📅 Your {target_day} Class Schedule"
-            elif detected_course:
-                matched_slots = [s for s in all_slots if s.get("course_code") == detected_course]
-                header_title = f"### 📅 Your {detected_course} Timetable Slots"
-            else:
-                matched_slots = all_slots
-                header_title = f"### 📅 Official Weekly Timetable ({student_name})"
-
-            lines = [
-                f"<div class=\"subagent-compact-badge\"><strong>🤖 Timetable Specialist:</strong> Retrieved verified STARS schedule ({student_name}, {pdata.get('academic_year', '2026')} {pdata.get('semester', 'Semester 1')}).</div>",
-                "",
-                header_title,
-                ""
-            ]
-
-            if any(k in user_query.lower() for k in ["exam", "finals", "test date"]):
-                lines.append("#### 🎯 Registered Final Exam Schedules:")
-                exam_courses = [c for c in all_courses if "not applicable" not in c.get("exam_schedule", "").lower()]
-                for ec in exam_courses:
-                    lines.append(f"- **{ec['course_code']} ({ec['title']})**: 🗓 **{ec['exam_schedule']}** (Index: {ec['index']}, {ec['aus']} AUs)")
-                lines.append("")
-
-            if matched_slots:
-                lines.append("#### 🏛 Weekly Class Slots & Venues:")
-                for s in matched_slots:
-                    venue_txt = f"📍 **{s.get('venue')}**" if s.get('venue') else "📍 Venue TBA"
-                    grp_txt = f"[{s.get('group')}]" if s.get('group') else ""
-                    lines.append(f"- **{s.get('day')}** {s.get('time_range')} • **{s.get('course_code')}** {s.get('event_type')} {grp_txt} — {venue_txt} *({s.get('weeks', 'All Weeks')})*")
-            else:
-                lines.append(f"No scheduled classes found for the selected filter.")
-
-            lines.append("")
-            lines.append(f"💡 *Tip: Click on the **Timetable Card** on the left dashboard panel or use `<a href=\"/api/timetable/file\" target=\"_blank\" style=\"color:var(--accent-cyan);\">📄 Open Original PDF</a>` to view the full document.*")
-
-            final_reply = "\n".join(lines)
-
-        elif any(k in user_query.lower() for k in ["announcement", "group", "slot", "ca1", "briefing", "exam time", "notice"]):
-            ntu_res = execute_subagent_tool(
-                name="task_ntulearn_specialist",
-                args={"course_code": detected_course or "MS3082", "query": detected_topic},
-                term=term
-            )
-            delegation_steps.append({
-                "agent": "NTULearn Specialist Sub-Agent",
-                "action": f"Inspected announcements and notices for {detected_course or 'MS3082'}",
-                "input": {"course_code": detected_course, "query": detected_topic},
-                "result_summary": ntu_res.get("finding") or "Retrieved announcements."
-            })
-
-            doc_res = execute_subagent_tool(
-                name="task_document_specialist",
-                args={"course_code": detected_course or "MS3082", "task_type": "general_search", "detail": "GROUP"},
-                term=term
-            )
-            delegation_steps.append({
-                "agent": "Document Specialist Sub-Agent",
-                "action": f"Inspected group roster documents for {detected_course or 'MS3082'}",
-                "input": {"course_code": detected_course, "detail": "GROUP"},
-                "result_summary": "Extracted student group assignments and TA contacts."
-            })
-
-            lines = [
-                f"### 🎯 Your {detected_course or 'MS3082'} Group & Exam Schedule",
-                ""
-            ]
-
-            lines.append("#### 👥 Your Lab Group Assignment:")
-            lines.append("- **Student:** **HARVEY CHIN-TAO CHEUNG (HARV0009)**")
-            lines.append("- **Assigned Group:** **Group 4 (G04)**")
-            lines.append("- **Teaching Assistant:** **CHOI JAE UK** (`CHOI0024@e.ntu.edu.sg`)")
-            lines.append("- **Roster Document:** [OPEN_DOC:_5825461_1:MS3082_GROUPS_AY2026_S1.pdf]")
-            lines.append("")
-
-            anns = ntu_res.get("announcements", [])
-            if anns:
-                lines.append("#### 📢 Official Announcements & Details:")
-                for a in anns[:3]:
-                    lines.append(f"**{a['title']}** *(Posted: {a.get('posted', '')[:10]})*:")
-                    lines.append(f"```text\n{a.get('body', '').strip()}\n```")
-                    lines.append("")
-
-            lines.append("#### ⏰ What You Need to Know for CA1 (September 9, 2026):")
-            lines.append("- **Your Exam Slot:** **11:30 AM - 12:30 PM** (Groups 1–7)")
-            lines.append("- **Venue:** **MSE-ESPACE**")
-            lines.append("- **What to Bring:** Built parts on a **USB drive** (cannot be shared).")
-            lines.append("- **Note:** Once the exam starts, computers are browser-locked. No phones or personal laptops allowed.")
-
-            final_reply = "\n".join(lines)
-        else:
-            subagent_res = execute_subagent_tool(
-                name="task_document_specialist",
-                args={
-                    "course_code": detected_course or (courses[0]["course_code"] if courses else "General"),
-                    "task_type": "find_tutorial_pdf",
-                    "detail": detected_topic or user_query
-                },
-                term=term
-            )
-            course_disp = detected_course or "enrolled modules"
-            topic_disp = detected_topic or "requested coursework"
-
-            delegation_steps.append({
-                "agent": "Document Specialist Sub-Agent",
-                "action": f"Tasked to inspect {course_disp} documents for '{topic_disp}'",
-                "input": {"course_code": detected_course, "detail": detected_topic},
-                "result_summary": subagent_res.get("finding") or "Successfully retrieved matching documents and questions."
-            })
-
-            q_sheets = subagent_res.get("question_sheets_found", [])
-            s_sheets = subagent_res.get("solution_sheets_found", [])
-            scheds = subagent_res.get("schedules_extracted", [])
-
-            lines = [
-                f"### 🎯 Immediate Priority: What You Need To Do",
-                f"You are currently in **Week 4/5 of Semester 1 (AY2026/27)** for **{course_disp}**.",
-                ""
-            ]
-
-            if q_sheets:
-                lines.append("#### 📄 Exact Tutorial Question Sheets (Practice Problems):")
-                for q in q_sheets[:3]:
-                    lines.append(f"- **{q['title']}**: {q['action_link']}")
-                    if q.get("key_questions"):
-                        lines.append(f"  - **Questions to Solve:**")
-                        for q_item in q["key_questions"][:3]:
-                            lines.append(f"    - `{q_item}`")
-                lines.append("")
-
-            if s_sheets:
-                lines.append("#### 🔑 Worked Solutions & Answer Keys:")
-                for s in s_sheets[:2]:
-                    lines.append(f"- **{s['title']}**: {s['action_link']}")
-                lines.append("")
-
-            if not q_sheets and not s_sheets:
-                lines.append(f"I searched the database for materials related to `{topic_disp}`, but found no exact matches. Check your course folder or run a full sync.")
-                lines.append("")
-
-            if scheds:
-                lines.append("#### 📅 Semester Schedule & Milestones:")
-                for sc in scheds[:4]:
-                    lines.append(f"- **Week {sc.get('week_number', '?')} ({sc.get('event_date', 'Semester 1')}):** {sc.get('title')} {f'({sc.get("notes")})' if sc.get('notes') else ''}")
-                lines.append("")
-
-            lines.append("#### 💡 Recommended Next Step:")
-            if q_sheets:
-                lines.append(f"Click on the **{q_sheets[0]['title']}** link above to open and start working through the practice problems directly in your dashboard.")
-            else:
-                lines.append("Review the lecture slides and attempt the tutorial questions before your upcoming class.")
-
-            final_reply = "\n".join(lines)
+        final_reply = "\n".join(reply_lines)
 
     # Build visible compact Sub-Agent Delegation badges
     delegation_callout = ""
@@ -585,16 +558,13 @@ Student Question: {user_query}
 
     composed_reply = f"{delegation_callout}{final_reply}"
 
-    # Save to chat history for context preservation
-    try:
-        db.save_chat_message("user", user_query, agent_name="User", session_id=session_id)
-        db.save_chat_message("assistant", composed_reply, agent_name="Lead Orchestrator", session_id=session_id)
-    except Exception:
-        pass
+    db.save_chat_message("user", user_query, agent_name="User", session_id=session_id)
+    db.save_chat_message("assistant", composed_reply, agent_name="Lead Orchestrator", session_id=session_id)
 
     return {
         "reply": composed_reply,
-        "delegation_steps": delegation_steps,
         "agent": "Lead Orchestrator",
-        "timestamp": datetime.now().isoformat()
+        "delegation_steps": delegation_steps,
+        "model": LEAD_MODEL_ID,
+        "term": term,
     }

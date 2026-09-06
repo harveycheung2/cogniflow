@@ -1,6 +1,7 @@
 import re
 import sqlite3
 import json
+import re
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 from core.config import DB_PATH
@@ -441,15 +442,21 @@ def get_available_terms() -> List[str]:
         terms = [r["term"] for r in rows if r["term"]]
         return terms
 
-def get_announcements(term: Optional[str] = None, limit: int = 30) -> List[Dict[str, Any]]:
+def get_announcements(term: Optional[str] = None, course_code: Optional[str] = None, limit: int = 30) -> List[Dict[str, Any]]:
     with get_connection() as conn:
+        query = "SELECT * FROM announcements WHERE 1=1"
+        params = []
         if term and term.upper() != "ALL":
-            rows = conn.execute(
-                "SELECT * FROM announcements WHERE course_code LIKE ? ORDER BY posted_at DESC LIMIT ?",
-                (f"%{term.upper()}%", limit)
-            ).fetchall()
-        else:
-            rows = conn.execute("SELECT * FROM announcements ORDER BY posted_at DESC LIMIT ?", (limit,)).fetchall()
+            query += " AND course_code LIKE ?"
+            params.append(f"%{term.upper()}%")
+        if course_code and course_code.upper() != "ALL":
+            clean_c = re.search(r'\b([A-Z]{2,4}\d{4}[A-Z]?)\b', course_code, re.IGNORECASE)
+            c_str = clean_c.group(1) if clean_c else course_code
+            query += " AND course_code LIKE ?"
+            params.append(f"%{c_str.upper()}%")
+        query += " ORDER BY posted_at DESC LIMIT ?"
+        params.append(limit)
+        rows = conn.execute(query, params).fetchall()
         return [dict(r) for r in rows]
 
 def get_course_materials(course_id: str) -> List[Dict[str, Any]]:
