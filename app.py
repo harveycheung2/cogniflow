@@ -29,6 +29,7 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 class ChatRequest(BaseModel):
     message: str
     term: Optional[str] = "26S1"
+    session_id: Optional[str] = "default"
 
 class TaskCreate(BaseModel):
     title: str
@@ -245,11 +246,11 @@ def get_schedule(term: str = Query("26S1")):
 
 @app.post("/api/chat")
 def chat(req: ChatRequest):
-    return execute_chat_query(req.message, term=req.term or "26S1")
+    return execute_chat_query(req.message, term=req.term or "26S1", session_id=req.session_id or "default")
 
 @app.get("/api/chat/history")
-def chat_history():
-    return db.get_chat_history()
+def chat_history(session_id: str = Query("default")):
+    return db.get_chat_history(session_id=session_id)
 
 @app.post("/api/download/material")
 def download_material(req: DownloadRequest, bg: BackgroundTasks):

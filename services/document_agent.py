@@ -225,7 +225,7 @@ Analyze the actual contents and return ONLY valid JSON:
                     messages=[{"role": "user", "content": prompt}],
                     system_prompt="You are an academic materials intelligence reader. Output strictly valid JSON without markdown wrapping.",
                     model_id=self.specialist_model,
-                    max_tokens=1500,
+                    max_tokens=700,
                     temperature=0.1
                 )
                 clean_json = re.sub(r'^```json\s*', '', ai_resp.strip())
