@@ -487,3 +487,277 @@ body {
   background: #141a28;
   color: #fff;
 }
+
+
+/* ==========================================================================
+   Timetable Intelligence UI (Prompt, Saved Card, Modal, Weekly Grid, Table)
+   ========================================================================== */
+
+.timetable-panel-container {
+  padding: 12px 16px 4px 16px;
+}
+
+/* Prompt Card (when no timetable is attached yet) */
+.timetable-prompt-card {
+  background: linear-gradient(135deg, rgba(0, 242, 254, 0.05) 0%, rgba(79, 172, 254, 0.08) 100%);
+  border: 1.5px dashed rgba(0, 242, 254, 0.35);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  transition: all 0.25s ease;
+  position: relative;
+  overflow: hidden;
+}
+.timetable-prompt-card:hover {
+  border-color: var(--accent-cyan);
+  background: linear-gradient(135deg, rgba(0, 242, 254, 0.08) 0%, rgba(79, 172, 254, 0.14) 100%);
+  box-shadow: 0 4px 18px rgba(0, 242, 254, 0.12);
+}
+.timetable-prompt-icon {
+  font-size: 1.8rem;
+  flex-shrink: 0;
+}
+.timetable-prompt-content {
+  flex: 1;
+}
+.timetable-prompt-title {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #fff;
+  margin-bottom: 2px;
+}
+.timetable-prompt-subtitle {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  line-height: 1.35;
+  margin-bottom: 8px;
+}
+.timetable-upload-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  margin: 0;
+}
+
+/* Saved Card (when timetable is attached & saved) */
+.timetable-saved-card {
+  background: linear-gradient(135deg, rgba(20, 28, 45, 0.85) 0%, rgba(30, 42, 65, 0.7) 100%);
+  border: 1px solid rgba(0, 242, 254, 0.25);
+  border-left: 4px solid var(--accent-cyan);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.timetable-saved-card:hover {
+  transform: translateY(-1px);
+  border-color: var(--accent-cyan);
+  box-shadow: 0 4px 20px rgba(0, 242, 254, 0.15);
+}
+.timetable-saved-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.timetable-saved-icon {
+  font-size: 1.5rem;
+}
+.timetable-saved-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.timetable-saved-meta {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.timetable-saved-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Modal Window for Timetable Viewer */
+.modal-backdrop {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(4, 7, 13, 0.82);
+  backdrop-filter: blur(8px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  transition: opacity 0.2s ease;
+}
+.modal-backdrop.hidden {
+  display: none;
+}
+.timetable-modal-card {
+  background: #0f1523;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-lg);
+  width: 95vw;
+  max-width: 1200px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.75);
+  overflow: hidden;
+}
+.tt-modal-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 10px;
+}
+.tt-tab-content {
+  display: none;
+}
+.tt-tab-content.active {
+  display: block;
+}
+
+/* Weekly Timetable Grid */
+.timetable-grid-container {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+@media (max-width: 900px) {
+  .timetable-grid-container {
+    grid-template-columns: 1fr;
+  }
+}
+.day-column {
+  background: rgba(22, 30, 48, 0.5);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.day-column-header {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--accent-cyan);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  display: flex;
+  justify-content: space-between;
+}
+.class-slot-card {
+  background: rgba(30, 42, 68, 0.85);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+.class-slot-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+.class-slot-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.class-slot-course {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #fff;
+}
+.class-slot-badge {
+  font-size: 0.65rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.badge-lec { background: rgba(0, 242, 254, 0.15); color: var(--accent-cyan); border: 1px solid rgba(0, 242, 254, 0.3); }
+.badge-tut { background: rgba(246, 211, 101, 0.15); color: var(--accent-yellow); border: 1px solid rgba(246, 211, 101, 0.3); }
+.badge-lab { background: rgba(255, 107, 107, 0.15); color: var(--accent-red); border: 1px solid rgba(255, 107, 107, 0.3); }
+
+.class-slot-time {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.class-slot-venue {
+  font-size: 0.72rem;
+  color: #fff;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  width: fit-content;
+}
+.class-slot-weeks {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+}
+
+/* Registered Courses Table in Modal */
+.tt-courses-table-container {
+  overflow-x: auto;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+}
+.tt-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+  text-align: left;
+}
+.tt-table th {
+  background: rgba(25, 34, 54, 0.85);
+  color: var(--text-muted);
+  font-weight: 600;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-color);
+}
+.tt-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  color: var(--text-main);
+}
+.tt-table tr:hover td {
+  background: rgba(255, 255, 255, 0.02);
+}
+.exam-pill {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+.exam-scheduled {
+  background: rgba(255, 107, 107, 0.15);
+  color: #ff8e8e;
+  border: 1px solid rgba(255, 107, 107, 0.3);
+}
+.exam-na {
+  color: var(--text-muted);
+}

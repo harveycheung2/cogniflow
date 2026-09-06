@@ -264,9 +264,21 @@ def execute_chat_query(user_query: str, term: str = "26S1", session_id: str = "d
             history_lines.append(f"{role_label}: {clean_text[:180]}")
         history_context = "\nRecent Conversation History:\n" + "\n".join(history_lines) + "\n"
 
+    # Active Timetable Context
+    active_tt = db.get_active_timetable(term=term)
+    tt_summary = ""
+    if active_tt and active_tt.get("parsed_data"):
+        pdata = active_tt["parsed_data"]
+        sname = pdata.get("student_name", "Student")
+        slots_list = pdata.get("weekly_slots", [])
+        slots_text = "; ".join([f"{s['day']} {s['start_time']}-{s['end_time']} {s['course_code']} {s['event_type']} @ {s.get('venue','TBA')}" for s in slots_list])
+        exams_list = [f"{c['course_code']}: {c['exam_schedule']}" for c in pdata.get("courses", []) if "not applicable" not in c.get("exam_schedule", "").lower()]
+        exams_text = "; ".join(exams_list)
+        tt_summary = f"\nStudent Profile: {sname}\nOfficial Timetable Weekly Slots: {slots_text}\nOfficial Final Exam Dates: {exams_text}\n"
+
     initial_context = f"""Current Date: {datetime.now().strftime('%d %B %Y')} (AY2026/27 Semester 1 - Week 4/5)
 Enrolled Modules: {courses_str}
-{history_context}
+{tt_summary}{history_context}
 Student Question: {user_query}
 """
 
@@ -367,9 +379,77 @@ Student Question: {user_query}
             if generic_topics:
                 detected_topic = generic_topics[0]
 
-        is_announcement_query = any(k in user_query.lower() for k in ["announcement", "group", "slot", "ca1", "briefing", "exam time", "notice"])
+                # Check if user is asking about timetable, class schedule, venues, or exam dates
+        is_tt_query = any(k in user_query.lower() for k in ["timetable", "class", "classes", "venue", "lecture", "tutorial", "lab slot", "when is my", "where is my", "schedule", "exam date", "exams", "finals"])
+        active_tt = db.get_active_timetable(term=term)
 
-        if is_announcement_query:
+        if is_tt_query and active_tt and active_tt.get("parsed_data"):
+            pdata = active_tt["parsed_data"]
+            student_name = pdata.get("student_name", "Student")
+            all_slots = pdata.get("weekly_slots", [])
+            all_courses = pdata.get("courses", [])
+
+            delegation_steps.append({
+                "agent": "Timetable & Schedule Specialist Sub-Agent",
+                "action": f"Queried official STARS timetable for {student_name} ({term})",
+                "input": {"query": user_query},
+                "result_summary": f"Found {len(all_slots)} weekly class slots across 5 days and {len(all_courses)} registered modules."
+            })
+
+            # Check if specific day is queried
+            day_matches = {
+                "monday": "MON", "mon": "MON",
+                "tuesday": "TUE", "tue": "TUE",
+                "wednesday": "WED", "wed": "WED",
+                "thursday": "THU", "thu": "THU",
+                "friday": "FRI", "fri": "FRI"
+            }
+            target_day = None
+            for d_name, d_code in day_matches.items():
+                if d_name in user_query.lower():
+                    target_day = d_code
+                    break
+
+            # Filter slots
+            if target_day:
+                matched_slots = [s for s in all_slots if s.get("day") == target_day]
+                header_title = f"### 📅 Your {target_day} Class Schedule"
+            elif detected_course:
+                matched_slots = [s for s in all_slots if s.get("course_code") == detected_course]
+                header_title = f"### 📅 Your {detected_course} Timetable Slots"
+            else:
+                matched_slots = all_slots
+                header_title = f"### 📅 Official Weekly Timetable ({student_name})"
+
+            lines = [
+                f"<div class=\"subagent-compact-badge\"><strong>🤖 Timetable Specialist:</strong> Retrieved verified STARS schedule ({student_name}, {pdata.get('academic_year', '2026')} {pdata.get('semester', 'Semester 1')}).</div>",
+                "",
+                header_title,
+                ""
+            ]
+
+            if any(k in user_query.lower() for k in ["exam", "finals", "test date"]):
+                lines.append("#### 🎯 Registered Final Exam Schedules:")
+                exam_courses = [c for c in all_courses if "not applicable" not in c.get("exam_schedule", "").lower()]
+                for ec in exam_courses:
+                    lines.append(f"- **{ec['course_code']} ({ec['title']})**: 🗓 **{ec['exam_schedule']}** (Index: {ec['index']}, {ec['aus']} AUs)")
+                lines.append("")
+
+            if matched_slots:
+                lines.append("#### 🏛 Weekly Class Slots & Venues:")
+                for s in matched_slots:
+                    venue_txt = f"📍 **{s.get('venue')}**" if s.get('venue') else "📍 Venue TBA"
+                    grp_txt = f"[{s.get('group')}]" if s.get('group') else ""
+                    lines.append(f"- **{s.get('day')}** {s.get('time_range')} • **{s.get('course_code')}** {s.get('event_type')} {grp_txt} — {venue_txt} *({s.get('weeks', 'All Weeks')})*")
+            else:
+                lines.append(f"No scheduled classes found for the selected filter.")
+
+            lines.append("")
+            lines.append(f"💡 *Tip: Click on the **Timetable Card** on the left dashboard panel or use `<a href=\"/api/timetable/file\" target=\"_blank\" style=\"color:var(--accent-cyan);\">📄 Open Original PDF</a>` to view the full document.*")
+
+            final_reply = "\n".join(lines)
+
+        elif any(k in user_query.lower() for k in ["announcement", "group", "slot", "ca1", "briefing", "exam time", "notice"]):
             ntu_res = execute_subagent_tool(
                 name="task_ntulearn_specialist",
                 args={"course_code": detected_course or "MS3082", "query": detected_topic},

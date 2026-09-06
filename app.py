@@ -2,7 +2,7 @@ import os
 import sys
 from pathlib import Path
 from typing import Optional, Dict, Any, List
-from fastapi import FastAPI, BackgroundTasks, HTTPException, Query
+from fastapi import FastAPI, BackgroundTasks, HTTPException, Query, File, UploadFile, Form
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -17,9 +17,11 @@ from services.ntulearn import ntulearn_service
 from services.planner import generate_day_schedule, extract_tasks_from_announcements
 from services.agents import execute_chat_query
 from services.document_agent import document_agent
+from services.timetable_service import timetable_service
 
 # Initialize DB
 db.init_db()
+timetable_service.seed_default_if_needed()
 
 app = FastAPI(title=APP_NAME, version=APP_VERSION)
 STATIC_DIR = BASE_DIR / "static"
@@ -258,6 +260,57 @@ def download_material(req: DownloadRequest, bg: BackgroundTasks):
         ntulearn_service.download_material_file(req.mat_id, req.course_code, req.title, req.download_url, req.file_name or "")
     bg.add_task(_dl)
     return {"message": f"Downloading {req.title}..."}
+
+
+# Timetable Intelligence & Extraction Endpoints
+@app.get("/api/timetable")
+def get_timetable(term: str = Query("26S1")):
+    tt = timetable_service.get_active_timetable(term=term)
+    if not tt:
+        tt = timetable_service.seed_default_if_needed(term=term)
+    if not tt:
+        return {"has_timetable": False, "timetable": None}
+    return {
+        "has_timetable": True,
+        "timetable": tt
+    }
+
+@app.post("/api/timetable/upload")
+async def upload_timetable(file: UploadFile = File(...), term: str = Form("26S1")):
+    if not file.filename.lower().endswith((".pdf", ".png", ".jpg", ".jpeg")):
+        raise HTTPException(status_code=400, detail="Only PDF and image timetable documents are supported.")
+
+    save_path = timetable_service.timetable_dir / f"uploaded_{file.filename}"
+    with open(save_path, "wb") as buffer:
+        content = await file.read()
+        buffer.write(content)
+
+    try:
+        parsed = timetable_service.parse_timetable_pdf(save_path)
+        saved = timetable_service.save_timetable(parsed, save_path, file.filename)
+        return {
+            "success": True,
+            "message": f"Successfully extracted timetable for {parsed.get('student_name', 'Student')}",
+            "data": parsed
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to extract timetable: {str(e)}")
+
+@app.get("/api/timetable/file")
+def get_timetable_file(term: str = Query("26S1")):
+    tt = timetable_service.get_active_timetable(term=term)
+    if not tt or not tt.get("file_path"):
+        raise HTTPException(status_code=404, detail="No timetable document uploaded.")
+    fpath = Path(tt["file_path"])
+    if not fpath.exists():
+        raise HTTPException(status_code=404, detail="Timetable document missing on disk.")
+    media_type = "application/pdf" if fpath.suffix.lower() == ".pdf" else "application/octet-stream"
+    return FileResponse(
+        str(fpath),
+        media_type=media_type,
+        headers={"Content-Disposition": f"inline; filename=\"{fpath.name}\""}
+    )
+
 
 if __name__ == "__main__":
     print(f"Starting {APP_NAME} on http://{HOST}:{PORT}")

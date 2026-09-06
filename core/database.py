@@ -121,6 +121,23 @@ def init_db():
         )
         """)
 
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS timetable_documents (
+            id TEXT PRIMARY KEY,
+            file_name TEXT NOT NULL,
+            file_path TEXT NOT NULL,
+            file_size INTEGER DEFAULT 0,
+            student_name TEXT,
+            term TEXT DEFAULT '26S1',
+            total_courses INTEGER DEFAULT 0,
+            total_aus INTEGER DEFAULT 0,
+            data_json TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """)
+
+
         # Migrations for existing tables
         columns_to_add = [
             ('course_materials', 'course_code', 'TEXT'),
@@ -450,3 +467,40 @@ def get_chat_history(session_id: str = "default", limit: int = 50) -> List[Dict[
     with get_connection() as conn:
         rows = conn.execute("SELECT * FROM chat_messages WHERE session_id = ? ORDER BY id ASC LIMIT ?", (session_id, limit)).fetchall()
         return [dict(r) for r in rows]
+
+def save_timetable_document(doc_id: str, file_name: str, file_path: str, file_size: int,
+                           student_name: str, term: str, total_courses: int, total_aus: int, data_json: str):
+    with get_connection() as conn:
+        conn.execute("""
+        INSERT INTO timetable_documents (id, file_name, file_path, file_size, student_name, term, total_courses, total_aus, data_json, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(id) DO UPDATE SET
+            file_name=excluded.file_name,
+            file_path=excluded.file_path,
+            file_size=excluded.file_size,
+            student_name=excluded.student_name,
+            term=excluded.term,
+            total_courses=excluded.total_courses,
+            total_aus=excluded.total_aus,
+            data_json=excluded.data_json,
+            updated_at=CURRENT_TIMESTAMP
+        """, (doc_id, file_name, file_path, file_size, student_name, term, total_courses, total_aus, data_json))
+        conn.commit()
+
+def get_active_timetable(term: str = "26S1") -> Optional[Dict[str, Any]]:
+    with get_connection() as conn:
+        row = conn.execute("SELECT * FROM timetable_documents WHERE term = ? OR id = 'active_timetable' ORDER BY updated_at DESC LIMIT 1", (term,)).fetchone()
+        if row:
+            d = dict(row)
+            if d.get("data_json"):
+                try:
+                    d["parsed_data"] = json.loads(d["data_json"])
+                except Exception:
+                    d["parsed_data"] = {}
+            return d
+        return None
+
+def delete_active_timetable(term: str = "26S1"):
+    with get_connection() as conn:
+        conn.execute("DELETE FROM timetable_documents WHERE term = ? OR id = 'active_timetable'", (term,))
+        conn.commit()
