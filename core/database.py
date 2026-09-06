@@ -1,18 +1,18 @@
 import sqlite3
 import json
-from datetime import datetime
+from pathlib import Path
 from typing import List, Dict, Any, Optional
 from core.config import DB_PATH
 
 def get_connection():
     conn = sqlite3.connect(str(DB_PATH))
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
     return conn
 
 def init_db():
     with get_connection() as conn:
         cursor = conn.cursor()
+
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS courses (
             id TEXT PRIMARY KEY,
@@ -28,6 +28,7 @@ def init_db():
         CREATE TABLE IF NOT EXISTS course_materials (
             id TEXT PRIMARY KEY,
             course_id TEXT,
+            course_code TEXT,
             title TEXT,
             content_type TEXT,
             url TEXT,
@@ -35,6 +36,9 @@ def init_db():
             parent_id TEXT,
             local_path TEXT,
             downloaded INTEGER DEFAULT 0,
+            file_size INTEGER DEFAULT 0,
+            file_name TEXT,
+            doc_type TEXT DEFAULT 'UNKNOWN',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (course_id) REFERENCES courses (id)
         )
@@ -56,12 +60,13 @@ def init_db():
         CREATE TABLE IF NOT EXISTS tasks (
             id TEXT PRIMARY KEY,
             title TEXT NOT NULL,
-            source TEXT DEFAULT 'manual', -- 'ntulearn', 'email', 'manual'
+            source TEXT DEFAULT 'manual',
             course_code TEXT,
+            term TEXT DEFAULT '26S1',
             due_date TEXT,
             estimated_minutes INTEGER DEFAULT 60,
             priority_score REAL DEFAULT 5.0,
-            status TEXT DEFAULT 'pending', -- 'pending', 'in_progress', 'completed'
+            status TEXT DEFAULT 'pending',
             notes TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -72,12 +77,60 @@ def init_db():
         CREATE TABLE IF NOT EXISTS chat_messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             session_id TEXT DEFAULT 'default',
-            role TEXT NOT NULL, -- 'user', 'assistant', 'system'
+            role TEXT NOT NULL,
             agent_name TEXT DEFAULT 'Lead Orchestrator',
             content TEXT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """)
+
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS parsed_documents (
+            id TEXT PRIMARY KEY,
+            course_id TEXT,
+            course_code TEXT,
+            title TEXT,
+            file_name TEXT,
+            doc_type TEXT DEFAULT 'UNKNOWN',
+            week_number INTEGER DEFAULT 0,
+            topic TEXT,
+            summary TEXT,
+            local_path TEXT,
+            schedule_data_json TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """)
+
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS course_schedules (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            course_code TEXT NOT NULL,
+            week_number INTEGER DEFAULT 0,
+            event_type TEXT DEFAULT 'lecture',
+            title TEXT NOT NULL,
+            event_date TEXT,
+            source_doc_id TEXT,
+            source_doc_title TEXT,
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """)
+
+        # Migrations for existing tables
+        columns_to_add = [
+            ('course_materials', 'course_code', 'TEXT'),
+            ('course_materials', 'file_size', 'INTEGER DEFAULT 0'),
+            ('course_materials', 'file_name', 'TEXT'),
+            ('course_materials', 'doc_type', "TEXT DEFAULT 'UNKNOWN'"),
+            ('tasks', 'term', "TEXT DEFAULT '26S1'")
+        ]
+        for tbl, col, col_type in columns_to_add:
+            try:
+                conn.execute(f"ALTER TABLE {tbl} ADD COLUMN {col} {col_type}")
+            except Exception:
+                pass
+
         conn.commit()
 
 def upsert_course(course_id: str, course_code: str, title: str, term: str):
@@ -105,39 +158,190 @@ def upsert_announcement(ann_id: str, course_id: str, course_code: str, title: st
         """, (ann_id, course_id, course_code, title, body, posted_at))
         conn.commit()
 
-def upsert_material(mat_id: str, course_id: str, title: str, content_type: str, url: str, download_url: str, parent_id: str = ""):
+def upsert_material(mat_id: str, course_id: str, title: str, content_type: str, url: str,
+                    download_url: str, parent_id: str = "", course_code: str = "",
+                    local_path: str = "", downloaded: int = 0, file_size: int = 0,
+                    file_name: str = "", doc_type: str = "UNKNOWN"):
     with get_connection() as conn:
         conn.execute("""
-        INSERT INTO course_materials (id, course_id, title, content_type, url, download_url, parent_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO course_materials (id, course_id, course_code, title, content_type, url, download_url, parent_id, local_path, downloaded, file_size, file_name, doc_type)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
             title=excluded.title,
+            course_code=COALESCE(NULLIF(excluded.course_code, ''), course_materials.course_code),
             content_type=excluded.content_type,
-            download_url=excluded.download_url
-        """, (mat_id, course_id, title, content_type, url, download_url, parent_id))
+            download_url=excluded.download_url,
+            parent_id=excluded.parent_id,
+            local_path=CASE WHEN excluded.local_path != '' THEN excluded.local_path ELSE course_materials.local_path END,
+            downloaded=MAX(course_materials.downloaded, excluded.downloaded),
+            file_size=CASE WHEN excluded.file_size > 0 THEN excluded.file_size ELSE course_materials.file_size END,
+            file_name=COALESCE(NULLIF(excluded.file_name, ''), course_materials.file_name),
+            doc_type=CASE WHEN excluded.doc_type != 'UNKNOWN' THEN excluded.doc_type ELSE course_materials.doc_type END
+        """, (mat_id, course_id, course_code, title, content_type, url, download_url, parent_id, local_path, downloaded, file_size, file_name, doc_type))
         conn.commit()
 
-def upsert_task(task_id: str, title: str, source: str, course_code: str, due_date: str, estimated_minutes: int, priority_score: float, notes: str = ""):
+def mark_material_downloaded(mat_id: str, local_path: str, file_size: int, file_name: str):
     with get_connection() as conn:
         conn.execute("""
-        INSERT INTO tasks (id, title, source, course_code, due_date, estimated_minutes, priority_score, notes, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        UPDATE course_materials
+        SET local_path = ?, downloaded = 1, file_size = ?, file_name = ?
+        WHERE id = ?
+        """, (local_path, file_size, file_name, mat_id))
+        conn.commit()
+
+def upsert_parsed_document(doc_id: str, course_id: str, course_code: str, title: str,
+                           file_name: str, doc_type: str, week_number: int, topic: str,
+                           summary: str, local_path: str, schedule_data_json: str):
+    with get_connection() as conn:
+        conn.execute("""
+        INSERT INTO parsed_documents (id, course_id, course_code, title, file_name, doc_type, week_number, topic, summary, local_path, schedule_data_json, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(id) DO UPDATE SET
+            course_code=excluded.course_code,
+            title=excluded.title,
+            file_name=excluded.file_name,
+            doc_type=excluded.doc_type,
+            week_number=excluded.week_number,
+            topic=excluded.topic,
+            summary=excluded.summary,
+            local_path=excluded.local_path,
+            schedule_data_json=excluded.schedule_data_json,
+            updated_at=CURRENT_TIMESTAMP
+        """, (doc_id, course_id, course_code, title, file_name, doc_type, week_number, topic, summary, local_path, schedule_data_json))
+
+        conn.execute("""
+        UPDATE course_materials
+        SET doc_type = ?
+        WHERE id = ?
+        """, (doc_type, doc_id))
+        conn.commit()
+
+def upsert_course_schedule(course_code: str, week_number: int, event_type: str, title: str,
+                           event_date: str = "", source_doc_id: str = "", source_doc_title: str = "", notes: str = ""):
+    with get_connection() as conn:
+        existing = conn.execute("""
+        SELECT id FROM course_schedules
+        WHERE course_code = ? AND week_number = ? AND title = ? AND event_type = ?
+        """, (course_code, week_number, title, event_type)).fetchone()
+
+        if existing:
+            conn.execute("""
+            UPDATE course_schedules
+            SET event_date = ?, source_doc_id = ?, source_doc_title = ?, notes = ?
+            WHERE id = ?
+            """, (event_date, source_doc_id, source_doc_title, notes, existing["id"]))
+        else:
+            conn.execute("""
+            INSERT INTO course_schedules (course_code, week_number, event_type, title, event_date, source_doc_id, source_doc_title, notes)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (course_code, week_number, event_type, title, event_date, source_doc_id, source_doc_title, notes))
+        conn.commit()
+
+def get_course_schedules(course_code: Optional[str] = None) -> List[Dict[str, Any]]:
+    with get_connection() as conn:
+        if course_code and course_code.upper() != "ALL":
+            rows = conn.execute("""
+            SELECT * FROM course_schedules
+            WHERE course_code LIKE ?
+            ORDER BY week_number ASC, id ASC
+            """, (f"%{course_code.upper()}%",)).fetchall()
+        else:
+            rows = conn.execute("""
+            SELECT * FROM course_schedules
+            ORDER BY course_code ASC, week_number ASC, id ASC
+            """).fetchall()
+        return [dict(r) for r in rows]
+
+def get_parsed_documents(course_code: Optional[str] = None, doc_type: Optional[str] = None) -> List[Dict[str, Any]]:
+    with get_connection() as conn:
+        query = "SELECT * FROM parsed_documents WHERE 1=1"
+        params = []
+        if course_code and course_code.upper() != "ALL":
+            query += " AND course_code LIKE ?"
+            params.append(f"%{course_code.upper()}%")
+        if doc_type and doc_type.upper() != "ALL":
+            query += " AND doc_type = ?"
+            params.append(doc_type.upper())
+        query += " ORDER BY course_code ASC, week_number ASC, title ASC"
+        rows = conn.execute(query, params).fetchall()
+        return [dict(r) for r in rows]
+
+def get_material_by_id(mat_id: str) -> Optional[Dict[str, Any]]:
+    with get_connection() as conn:
+        row = conn.execute("SELECT * FROM course_materials WHERE id = ?", (mat_id,)).fetchone()
+        return dict(row) if row else None
+
+def get_all_materials(course_code: Optional[str] = None, downloaded_only: bool = False) -> List[Dict[str, Any]]:
+    with get_connection() as conn:
+        query = "SELECT * FROM course_materials WHERE 1=1"
+        params = []
+        if course_code and course_code.upper() != "ALL":
+            query += " AND (course_code LIKE ? OR course_id IN (SELECT id FROM courses WHERE course_code LIKE ?))"
+            params.append(f"%{course_code.upper()}%")
+            params.append(f"%{course_code.upper()}%")
+        if downloaded_only:
+            query += " AND downloaded = 1"
+        query += " ORDER BY course_code ASC, title ASC"
+        rows = conn.execute(query, params).fetchall()
+        return [dict(r) for r in rows]
+
+def find_matching_tutorials(course_code: Optional[str] = None, query: str = "") -> List[Dict[str, Any]]:
+    with get_connection() as conn:
+        sql = """
+        SELECT m.*, p.summary, p.topic, p.week_number, p.doc_type as parsed_type
+        FROM course_materials m
+        LEFT JOIN parsed_documents p ON m.id = p.id
+        WHERE (m.title LIKE '%tutorial%' OR m.title LIKE '% tut %' OR m.title LIKE '% t1%' OR m.title LIKE '% t2%' OR m.title LIKE '% t3%'
+               OR m.doc_type LIKE '%TUTORIAL%' OR (p.doc_type IS NOT NULL AND p.doc_type LIKE '%TUTORIAL%'))
+        """
+        params = []
+        if course_code and course_code.upper() != "ALL":
+            sql += " AND (m.course_code LIKE ? OR m.course_id IN (SELECT id FROM courses WHERE course_code LIKE ?))"
+            params.append(f"%{course_code.upper()}%")
+            params.append(f"%{course_code.upper()}%")
+        if query:
+            sql += " AND (m.title LIKE ? OR p.summary LIKE ? OR p.topic LIKE ?)"
+            params.append(f"%{query}%")
+            params.append(f"%{query}%")
+            params.append(f"%{query}%")
+        sql += " ORDER BY m.course_code ASC, m.title ASC"
+        rows = conn.execute(sql, params).fetchall()
+        return [dict(r) for r in rows]
+
+def upsert_task(task_id: str, title: str, source: str, course_code: str, due_date: str, estimated_minutes: int, priority_score: float, notes: str = "", term: str = "26S1"):
+    with get_connection() as conn:
+        conn.execute("""
+        INSERT INTO tasks (id, title, source, course_code, term, due_date, estimated_minutes, priority_score, notes, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
         ON CONFLICT(id) DO UPDATE SET
             title=excluded.title,
+            term=excluded.term,
             due_date=excluded.due_date,
             estimated_minutes=excluded.estimated_minutes,
             priority_score=excluded.priority_score,
             notes=excluded.notes,
             updated_at=CURRENT_TIMESTAMP
-        """, (task_id, title, source, course_code, due_date, estimated_minutes, priority_score, notes))
+        """, (task_id, title, source, course_code, term, due_date, estimated_minutes, priority_score, notes))
         conn.commit()
 
-def get_tasks(status: Optional[str] = None) -> List[Dict[str, Any]]:
+def clear_announcement_tasks():
     with get_connection() as conn:
+        conn.execute("DELETE FROM tasks WHERE source = 'ntulearn'")
+        conn.commit()
+
+def get_tasks(term: Optional[str] = None, status: Optional[str] = None) -> List[Dict[str, Any]]:
+    with get_connection() as conn:
+        query = "SELECT * FROM tasks WHERE 1=1"
+        params = []
         if status:
-            rows = conn.execute("SELECT * FROM tasks WHERE status = ? ORDER BY priority_score DESC, due_date ASC", (status,)).fetchall()
-        else:
-            rows = conn.execute("SELECT * FROM tasks ORDER BY status ASC, priority_score DESC, due_date ASC").fetchall()
+            query += " AND status = ?"
+            params.append(status)
+        if term and term.upper() != "ALL":
+            query += " AND (term = ? OR course_code LIKE ?)"
+            params.append(term.upper())
+            params.append(f"%{term.upper()}%")
+        query += " ORDER BY status ASC, priority_score DESC, due_date ASC"
+        rows = conn.execute(query, params).fetchall()
         return [dict(r) for r in rows]
 
 def set_task_status(task_id: str, new_status: str):
@@ -145,14 +349,29 @@ def set_task_status(task_id: str, new_status: str):
         conn.execute("UPDATE tasks SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (new_status, task_id))
         conn.commit()
 
-def get_all_courses() -> List[Dict[str, Any]]:
+def get_all_courses(term: Optional[str] = None) -> List[Dict[str, Any]]:
     with get_connection() as conn:
-        rows = conn.execute("SELECT * FROM courses ORDER BY term DESC, course_code ASC").fetchall()
+        if term and term.upper() != "ALL":
+            rows = conn.execute("SELECT * FROM courses WHERE term = ? ORDER BY course_code ASC", (term.upper(),)).fetchall()
+        else:
+            rows = conn.execute("SELECT * FROM courses ORDER BY term DESC, course_code ASC").fetchall()
         return [dict(r) for r in rows]
 
-def get_announcements(limit: int = 20) -> List[Dict[str, Any]]:
+def get_available_terms() -> List[str]:
     with get_connection() as conn:
-        rows = conn.execute("SELECT * FROM announcements ORDER BY posted_at DESC LIMIT ?", (limit,)).fetchall()
+        rows = conn.execute("SELECT DISTINCT term FROM courses WHERE term != 'General' ORDER BY term DESC").fetchall()
+        terms = [r["term"] for r in rows if r["term"]]
+        return terms
+
+def get_announcements(term: Optional[str] = None, limit: int = 30) -> List[Dict[str, Any]]:
+    with get_connection() as conn:
+        if term and term.upper() != "ALL":
+            rows = conn.execute(
+                "SELECT * FROM announcements WHERE course_code LIKE ? ORDER BY posted_at DESC LIMIT ?",
+                (f"%{term.upper()}%", limit)
+            ).fetchall()
+        else:
+            rows = conn.execute("SELECT * FROM announcements ORDER BY posted_at DESC LIMIT ?", (limit,)).fetchall()
         return [dict(r) for r in rows]
 
 def get_course_materials(course_id: str) -> List[Dict[str, Any]]:

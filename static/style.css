@@ -462,3 +462,28 @@ body {
   font-size: 0.85rem;
   z-index: 1000;
 }
+
+.term-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-color);
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+.term-picker select {
+  background: transparent;
+  border: none;
+  color: var(--accent-cyan);
+  font-weight: 600;
+  font-size: 0.82rem;
+  outline: none;
+  cursor: pointer;
+}
+.term-picker select option {
+  background: #141a28;
+  color: #fff;
+}

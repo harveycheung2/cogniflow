@@ -3,18 +3,18 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Agentic Workday OS v2 — AI Academic & Productivity Hub</title>
+  <title>Agentic Workday OS v2 - Multi-Agent Academic & Document Intelligence</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
 :root {
   --bg-main: #0a0d14;
-  --bg-panel: rgba(20, 26, 40, 0.75);
-  --bg-card: rgba(30, 39, 58, 0.6);
+  --bg-panel: rgba(20, 26, 40, 0.78);
+  --bg-card: rgba(30, 39, 58, 0.65);
   --bg-input: #121824;
   --border-color: rgba(255, 255, 255, 0.08);
-  --border-glow: rgba(0, 242, 254, 0.3);
+  --border-glow: rgba(0, 242, 254, 0.35);
   --accent-cyan: #00f2fe;
   --accent-blue: #4facfe;
   --accent-purple: #8e2de2;
@@ -26,7 +26,7 @@
   --radius-lg: 16px;
   --radius-md: 10px;
   --radius-sm: 6px;
-  --shadow-panel: 0 8px 32px rgba(0, 0, 0, 0.45);
+  --shadow-panel: 0 8px 32px rgba(0, 0, 0, 0.5);
 }
 
 * {
@@ -37,7 +37,7 @@
 
 body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  background: radial-gradient(circle at top left, #111827, #0a0d14 60%);
+  background: radial-gradient(circle at top left, #111827, #0a0d14 65%);
   color: var(--text-main);
   min-height: 100vh;
   overflow-x: hidden;
@@ -48,7 +48,7 @@ body {
   flex-direction: column;
   height: 100vh;
   padding: 16px 24px;
-  gap: 16px;
+  gap: 14px;
 }
 
 /* Navbar */
@@ -57,10 +57,10 @@ body {
   justify-content: space-between;
   align-items: center;
   background: var(--bg-panel);
-  backdrop-filter: blur(16px);
+  backdrop-filter: blur(18px);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
-  padding: 14px 24px;
+  padding: 12px 24px;
   box-shadow: var(--shadow-panel);
 }
 
@@ -71,10 +71,10 @@ body {
 }
 
 .logo-icon {
-  font-size: 26px;
+  font-size: 24px;
   background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
-  width: 44px;
-  height: 44px;
+  width: 42px;
+  height: 42px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -83,40 +83,70 @@ body {
 }
 
 .brand h1 {
-  font-size: 1.25rem;
+  font-size: 1.2rem;
   font-weight: 700;
   letter-spacing: -0.02em;
 }
 
 .badge-version {
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   padding: 2px 8px;
   background: rgba(0, 242, 254, 0.15);
   color: var(--accent-cyan);
   border-radius: 12px;
-  vertical-align: middle;
   border: 1px solid rgba(0, 242, 254, 0.3);
 }
 
 .subtitle {
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   color: var(--text-muted);
+}
+
+.nav-tabs {
+  display: flex;
+  background: rgba(0, 0, 0, 0.25);
+  padding: 4px;
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  gap: 4px;
+}
+
+.tab-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  padding: 6px 14px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tab-btn.active {
+  background: var(--bg-card);
+  color: var(--accent-cyan);
+  border: 1px solid var(--border-glow);
+  box-shadow: 0 0 12px rgba(0, 242, 254, 0.2);
 }
 
 .header-badges {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .status-pill {
-  font-size: 0.8rem;
+  font-size: 0.76rem;
   font-weight: 500;
-  padding: 6px 14px;
+  padding: 5px 12px;
   border-radius: 20px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   border: 1px solid var(--border-color);
   background: rgba(0, 0, 0, 0.2);
 }
@@ -144,21 +174,49 @@ body {
   background: var(--accent-yellow);
 }
 
-.status-error {
-  color: var(--accent-red);
-  border-color: rgba(255, 107, 107, 0.3);
+.term-picker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-color);
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
 }
-.status-error .dot {
-  background: var(--accent-red);
+.term-picker select {
+  background: transparent;
+  border: none;
+  color: var(--accent-cyan);
+  font-weight: 600;
+  font-size: 0.8rem;
+  outline: none;
+  cursor: pointer;
+}
+.term-picker select option {
+  background: #141a28;
+  color: #fff;
 }
 
-/* Grid Layout */
-.dashboard-grid {
-  display: grid;
-  grid-template-columns: 1fr 1.3fr 1fr;
-  gap: 16px;
+/* Main Layout Views */
+.view-container {
   flex: 1;
   min-height: 0;
+  display: none;
+}
+.view-container.active {
+  display: grid;
+}
+
+.dashboard-grid {
+  grid-template-columns: 1.05fr 1.35fr 1.05fr;
+  gap: 14px;
+}
+
+.docs-grid {
+  grid-template-columns: 1.2fr 1.8fr;
+  gap: 14px;
 }
 
 /* Panels */
@@ -174,7 +232,7 @@ body {
 }
 
 .panel-header {
-  padding: 16px 20px;
+  padding: 14px 18px;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -182,27 +240,30 @@ body {
 }
 
 .panel-header h2 {
-  font-size: 0.95rem;
+  font-size: 0.92rem;
   font-weight: 600;
   letter-spacing: -0.01em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .section-break {
   border-top: 1px solid var(--border-color);
-  margin-top: 12px;
+  margin-top: 8px;
 }
 
 .count-tag {
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   font-weight: 600;
   background: rgba(255, 255, 255, 0.08);
-  padding: 3px 9px;
+  padding: 3px 8px;
   border-radius: 12px;
   color: var(--text-muted);
 }
 
 .ai-model-tag {
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   font-family: 'JetBrains Mono', monospace;
   color: var(--accent-cyan);
   background: rgba(0, 242, 254, 0.1);
@@ -214,9 +275,9 @@ body {
 /* Buttons */
 .btn {
   font-family: inherit;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   font-weight: 600;
-  padding: 8px 16px;
+  padding: 7px 14px;
   border-radius: var(--radius-sm);
   cursor: pointer;
   border: none;
@@ -231,10 +292,19 @@ body {
   color: #fff;
   box-shadow: 0 4px 14px rgba(79, 172, 254, 0.3);
 }
-
 .btn-primary:hover {
   transform: translateY(-1px);
   box-shadow: 0 6px 20px rgba(79, 172, 254, 0.45);
+}
+
+.btn-cyan {
+  background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
+  color: #0a0d14;
+  font-weight: 700;
+}
+.btn-cyan:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(0, 242, 254, 0.4);
 }
 
 .btn-outline {
@@ -248,12 +318,12 @@ body {
 
 .btn-sm {
   padding: 4px 10px;
-  font-size: 0.75rem;
+  font-size: 0.74rem;
 }
 
-/* Timeline & Tasks */
-.schedule-timeline, .tasks-list, .courses-list, .announcements-feed {
-  padding: 14px 18px;
+/* Timeline & Cards */
+.schedule-timeline, .tasks-list, .courses-list, .announcements-feed, .docs-list, .syllabus-timeline {
+  padding: 12px 16px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -265,26 +335,25 @@ body {
   border: 1px solid var(--border-color);
   border-left: 3px solid var(--accent-cyan);
   border-radius: var(--radius-md);
-  padding: 12px 14px;
+  padding: 10px 14px;
   display: flex;
   justify-content: space-between;
   align-items: center;
   transition: border-color 0.2s ease;
 }
-
 .timeline-card:hover {
   border-color: var(--accent-cyan);
 }
 
 .timeline-time {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   color: var(--accent-cyan);
   font-weight: 600;
 }
 
 .timeline-title {
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   font-weight: 500;
   margin-top: 2px;
 }
@@ -298,7 +367,6 @@ body {
   align-items: center;
   justify-content: space-between;
 }
-
 .task-check-btn {
   background: transparent;
   border: 1px solid var(--text-muted);
@@ -308,19 +376,17 @@ body {
   cursor: pointer;
   margin-right: 12px;
 }
-
 .task-item.completed {
   opacity: 0.5;
   text-decoration: line-through;
 }
 
 .priority-badge {
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   font-weight: 700;
-  padding: 2px 7px;
+  padding: 2px 6px;
   border-radius: 4px;
 }
-
 .priority-high {
   background: rgba(255, 107, 107, 0.18);
   color: var(--accent-red);
@@ -334,23 +400,21 @@ body {
 .prompt-chips {
   display: flex;
   gap: 8px;
-  padding: 10px 18px;
+  padding: 10px 16px;
   overflow-x: auto;
   border-bottom: 1px solid var(--border-color);
 }
-
 .chip {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--border-color);
   color: var(--text-muted);
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   padding: 4px 10px;
   border-radius: 14px;
   cursor: pointer;
   white-space: nowrap;
   transition: all 0.2s ease;
 }
-
 .chip:hover {
   background: rgba(0, 242, 254, 0.1);
   color: var(--accent-cyan);
@@ -367,19 +431,17 @@ body {
 }
 
 .chat-bubble {
-  max-width: 88%;
+  max-width: 90%;
   padding: 12px 16px;
   border-radius: var(--radius-md);
-  font-size: 0.88rem;
+  font-size: 0.85rem;
   line-height: 1.5;
 }
-
 .chat-bubble.assistant {
-  background: rgba(30, 39, 58, 0.8);
+  background: rgba(30, 39, 58, 0.85);
   border: 1px solid var(--border-color);
   align-self: flex-start;
 }
-
 .chat-bubble.user {
   background: linear-gradient(135deg, rgba(79, 172, 254, 0.3), rgba(142, 45, 226, 0.3));
   border: 1px solid rgba(79, 172, 254, 0.4);
@@ -387,7 +449,7 @@ body {
 }
 
 .sender-tag {
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   font-weight: 700;
   color: var(--accent-cyan);
   margin-bottom: 4px;
@@ -397,11 +459,10 @@ body {
 .chat-input-row {
   display: flex;
   gap: 10px;
-  padding: 14px 20px;
+  padding: 12px 18px;
   border-top: 1px solid var(--border-color);
   background: rgba(15, 20, 30, 0.6);
 }
-
 .chat-input-row input {
   flex: 1;
   background: var(--bg-input);
@@ -409,46 +470,93 @@ body {
   color: var(--text-main);
   padding: 10px 14px;
   border-radius: var(--radius-sm);
-  font-size: 0.88rem;
+  font-size: 0.85rem;
   outline: none;
 }
-
 .chat-input-row input:focus {
   border-color: var(--accent-cyan);
   box-shadow: 0 0 8px rgba(0, 242, 254, 0.3);
 }
 
-/* Course Cards */
-.course-card {
+/* Clickable Doc Badge */
+.doc-badge-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(135deg, rgba(0, 242, 254, 0.2), rgba(79, 172, 254, 0.2));
+  border: 1px solid var(--accent-cyan);
+  color: var(--accent-cyan) !important;
+  text-decoration: none !important;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 8px;
+  margin: 10px 0;
+  box-shadow: 0 0 16px rgba(0, 242, 254, 0.25);
+  transition: all 0.2s;
+}
+.doc-badge-link:hover {
+  background: linear-gradient(135deg, rgba(0, 242, 254, 0.35), rgba(79, 172, 254, 0.35));
+  transform: translateY(-2px);
+  box-shadow: 0 0 24px rgba(0, 242, 254, 0.45);
+}
+
+/* Document Cards */
+.doc-card {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   padding: 12px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.doc-card:hover {
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
-.course-code {
-  font-size: 0.78rem;
-  font-family: 'JetBrains Mono', monospace;
+.doc-tag {
+  font-size: 0.68rem;
   font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  font-family: 'JetBrains Mono', monospace;
+}
+.tag-tutorial-q {
+  background: rgba(0, 242, 254, 0.15);
   color: var(--accent-cyan);
+  border: 1px solid rgba(0, 242, 254, 0.3);
+}
+.tag-tutorial-sol {
+  background: rgba(0, 245, 160, 0.15);
+  color: var(--accent-green);
+  border: 1px solid rgba(0, 245, 160, 0.3);
+}
+.tag-lecture {
+  background: rgba(142, 45, 226, 0.2);
+  color: #c084fc;
+  border: 1px solid rgba(142, 45, 226, 0.4);
+}
+.tag-syllabus {
+  background: rgba(246, 211, 101, 0.15);
+  color: var(--accent-yellow);
+  border: 1px solid rgba(246, 211, 101, 0.3);
 }
 
-.course-title {
-  font-size: 0.85rem;
-  font-weight: 600;
-  margin-top: 2px;
-}
-
-.announcement-card {
+/* Syllabus Schedule Events */
+.schedule-event-card {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   padding: 10px 14px;
+  border-left: 3px solid var(--accent-blue);
 }
-
-.ann-date {
-  font-size: 0.7rem;
-  color: var(--text-muted);
+.schedule-event-card.event-tutorial {
+  border-left-color: var(--accent-cyan);
+}
+.schedule-event-card.event-exam, .schedule-event-card.event-ca_quiz {
+  border-left-color: var(--accent-red);
 }
 
 .empty-state {
@@ -469,25 +577,98 @@ body {
   border-radius: var(--radius-sm);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
   display: none;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   z-index: 1000;
+}
+  
+/* Sub-Agent Delegation Cards in Chat */
+.subagent-callout-card {
+  background: rgba(0, 242, 254, 0.05);
+  border: 1px solid rgba(0, 242, 254, 0.35);
+  border-left: 3px solid var(--accent-cyan);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  margin: 8px 0 12px 0;
+  font-size: 0.8rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.subagent-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--accent-cyan);
+  font-weight: 700;
+  margin-bottom: 4px;
+  letter-spacing: 0.02em;
+}
+
+.subagent-pulse {
+  width: 8px;
+  height: 8px;
+  background: var(--accent-cyan);
+  border-radius: 50%;
+  box-shadow: 0 0 10px var(--accent-cyan);
+  display: inline-block;
+  animation: pulse-glow 1.5s infinite alternate;
+}
+
+@keyframes pulse-glow {
+  from { opacity: 0.4; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1.2); }
+}
+
+.subagent-body {
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
+
+.subagent-body code {
+  font-family: 'JetBrains Mono', monospace;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 1px 4px;
+  border-radius: 4px;
+  color: #c084fc;
 }
 
 </style>
 </head>
 <body>
   <div class="app-container">
-    <!-- Top Header -->
+
+    <!-- Top Navigation -->
     <header class="navbar">
       <div class="brand">
-        <div class="logo-icon">⚡</div>
+        <div class="logo-icon">&#9881;</div>
         <div>
-          <h1>Agentic Workday OS <span class="badge-version">v2.0</span></h1>
-          <p class="subtitle">Multi-Agent Academic & Schedule Orchestrator</p>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <h1>Agentic Workday OS</h1>
+            <span class="badge-version">v2.0</span>
+          </div>
+          <div class="subtitle">Multi-Agent Academic & Document Intelligence Engine</div>
         </div>
       </div>
 
+      <!-- View Tabs -->
+      <div class="nav-tabs">
+        <button id="tab-btn-command" class="tab-btn active" onclick="switchView('command')">
+          &#9889; Daily Command Center
+        </button>
+        <button id="tab-btn-docs" class="tab-btn" onclick="switchView('docs')">
+          &#128218; Document & Schedule Hub
+        </button>
+      </div>
+
       <div class="header-badges">
+        <div class="term-picker">
+          <span>Semester:</span>
+          <select id="term-select" onchange="changeTerm(this.value)">
+            <option value="26S1" selected>26S1</option>
+            <option value="All">All Terms</option>
+          </select>
+        </div>
+
         <div id="bedrock-badge" class="status-pill status-loading">
           <span class="dot"></span> Bedrock: Checking...
         </div>
@@ -495,74 +676,73 @@ body {
           <span class="dot"></span> NTULearn: Checking...
         </div>
         <button id="btn-sync" class="btn btn-primary" onclick="triggerSync()">
-          <span class="btn-icon">🔄</span> Sync Blackboard
+          &#128260; Sync Blackboard
         </button>
       </div>
     </header>
 
-    <!-- Main Layout Grid -->
-    <main class="dashboard-grid">
-      
-      <!-- Left Column: Today's Priorities & Schedule -->
+    <!-- VIEW 1: Daily Command Center -->
+    <main id="view-command" class="view-container dashboard-grid active">
+
+      <!-- Left: Schedule & Tasks -->
       <section class="panel schedule-panel">
         <div class="panel-header">
-          <h2>📅 Today's Time-Blocked Schedule</h2>
-          <span id="schedule-counter" class="count-tag">0 Tasks</span>
+          <h2>&#9200; Today's Time-Blocked Schedule</h2>
+          <span id="schedule-counter" class="count-tag">0 Blocks</span>
         </div>
-        
         <div id="schedule-timeline" class="schedule-timeline">
           <div class="empty-state">Loading optimized schedule...</div>
         </div>
 
         <div class="panel-header section-break">
-          <h2>🎯 Prioritized Action Items</h2>
+          <h2>&#9989; Prioritized Action Items</h2>
           <button class="btn btn-sm btn-outline" onclick="openAddTaskModal()">+ Add Task</button>
         </div>
         <div id="tasks-list" class="tasks-list">
-          <div class="empty-state">No pending tasks. Click Sync to ingest announcements!</div>
+          <div class="empty-state">No pending tasks for this semester.</div>
         </div>
       </section>
 
-      <!-- Center Column: Multi-Agent AI Copilot -->
+      <!-- Center: AI Copilot -->
       <section class="panel chat-panel">
         <div class="panel-header">
-          <h2>🧠 Multi-Agent Lead Orchestrator</h2>
-          <span class="ai-model-tag">Claude 3.5/4.5 Sonnet & Haiku</span>
+          <h2>&#129302; Multi-Agent Lead Orchestrator</h2>
+          <span class="ai-model-tag">AWS Bedrock Claude & Specialist Engine</span>
         </div>
 
         <div class="prompt-chips">
-          <button class="chip" onclick="sendPrompt('What are my highest priority tasks for today?')">🔥 Today's Priorities</button>
-          <button class="chip" onclick="sendPrompt('Check all recent NTULearn announcements for deadlines.')">📢 Deadlines & Quizzes</button>
-          <button class="chip" onclick="sendPrompt('Create an optimized 4-hour study plan for tonight.')">⏳ 4-Hour Study Plan</button>
+          <button class="chip" onclick="sendPrompt('What do I need to do right now? Which tutorial do I need?')">&#128196; What tutorial do I need?</button>
+          <button class="chip" onclick="sendPrompt('Show me the complete semester schedule for MS3013 from Lecture 1.')">&#128197; MS3013 Schedule</button>
+          <button class="chip" onclick="sendPrompt('Check all recent 26S1 announcements for deadlines or labs.')">&#128680; Urgent Deadlines</button>
+          <button class="chip" onclick="sendPrompt('Create an optimized 3-hour study plan for tonight.')">&#9889; 3-Hour Plan</button>
         </div>
 
         <div id="chat-messages" class="chat-messages">
           <div class="chat-bubble assistant">
             <div class="sender-tag">Lead Orchestrator</div>
-            <p>Welcome to <strong>Agentic Workday OS v2</strong>! I am connected to Amazon Bedrock and can access your NTULearn courses, announcements, deadlines, and schedule.</p>
-            <p>How can I help orchestrate your day?</p>
+            <p>Welcome to <strong>Agentic Workday OS v2</strong>! I have indexed your enrolled modules, announcements, and lecture slides.</p>
+            <p>Ask me <em>"What tutorial do I need?"</em> or <em>"What should I do right now?"</em> and I will analyze the timetable and pull out the exact PDF for you.</p>
           </div>
         </div>
 
         <form id="chat-form" class="chat-input-row" onsubmit="handleChatSubmit(event)">
-          <input type="text" id="chat-input" placeholder="Ask your Lead Agent (e.g., 'Summarize urgent deadlines', 'Plan my afternoon')..." autocomplete="off" />
+          <input type="text" id="chat-input" placeholder="Ask your Lead Agent (e.g. 'Which tutorial PDF do I need?', 'What is due for MS3013?')..." autocomplete="off" />
           <button type="submit" class="btn btn-primary" id="btn-send">Send</button>
         </form>
       </section>
 
-      <!-- Right Column: Courses & Blackboard Feed -->
+      <!-- Right: Enrolled Modules & Feed -->
       <section class="panel courses-panel">
         <div class="panel-header">
-          <h2>📚 Enrolled Modules</h2>
+          <h2>&#128218; Enrolled Modules</h2>
           <span id="courses-count" class="count-tag">0 Modules</span>
         </div>
-
         <div id="courses-list" class="courses-list">
-          <div class="empty-state">No courses loaded yet. Click <strong>Sync Blackboard</strong> above.</div>
+          <div class="empty-state">No modules loaded. Click <strong>Sync Blackboard</strong> above.</div>
         </div>
 
         <div class="panel-header section-break">
-          <h2>📢 Live NTULearn Feed</h2>
+          <h2>&#128227; Live NTULearn Announcements</h2>
         </div>
         <div id="announcements-feed" class="announcements-feed">
           <div class="empty-state">No announcements recorded.</div>
@@ -570,83 +750,162 @@ body {
       </section>
 
     </main>
+
+    <!-- VIEW 2: Document & Schedule Hub -->
+    <main id="view-docs" class="view-container docs-grid">
+
+      <!-- Left Sub-Panel: Extracted Semester Schedules -->
+      <section class="panel">
+        <div class="panel-header">
+          <h2>&#128197; Extracted Semester Schedules & Timetables</h2>
+          <span id="schedule-event-counter" class="count-tag">0 Events</span>
+        </div>
+        <div style="padding: 10px 16px; border-bottom: 1px solid var(--border-color); display: flex; gap: 8px;">
+          <button class="btn btn-sm btn-cyan" onclick="triggerParseAll()">&#129504; Run AI Classifier & Schedule Extractor</button>
+        </div>
+        <div id="syllabus-timeline" class="syllabus-timeline">
+          <div class="empty-state">No schedule items extracted yet. Run AI Classifier to analyze lecture slides!</div>
+        </div>
+      </section>
+
+      <!-- Right Sub-Panel: Course Documents Repository -->
+      <section class="panel">
+        <div class="panel-header">
+          <h2>&#128196; Downloaded Documents & Tutorial Repository</h2>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn btn-sm btn-outline" onclick="triggerCrawl()">&#128269; Crawl Materials</button>
+            <button class="btn btn-sm btn-primary" onclick="triggerDownloadAll()">&#11015; Download All Documents</button>
+          </div>
+        </div>
+        <div style="padding: 10px 16px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+          <div style="display: flex; gap: 6px;">
+            <button class="btn btn-sm btn-outline active" onclick="filterDocs('ALL')">All</button>
+            <button class="btn btn-sm btn-outline" onclick="filterDocs('TUTORIAL')">Tutorials</button>
+            <button class="btn btn-sm btn-outline" onclick="filterDocs('LECTURE')">Lectures</button>
+            <button class="btn btn-sm btn-outline" onclick="filterDocs('SYLLABUS')">Schedules</button>
+          </div>
+          <span id="docs-count" class="count-tag">0 Documents</span>
+        </div>
+        <div id="docs-list" class="docs-list">
+          <div class="empty-state">Loading materials...</div>
+        </div>
+      </section>
+
+    </main>
+
   </div>
 
-  <!-- Notification Banner -->
   <div id="toast" class="toast"></div>
 
   <script>
-// Agentic Workday OS v2 Frontend Controller
+let currentTerm = "26S1";
+let currentView = "command";
+let allMaterialsCache = [];
+let activeDocFilter = "ALL";
 
 document.addEventListener("DOMContentLoaded", () => {
+  fetchTerms();
   fetchStatus();
+  refreshAll();
+  setInterval(fetchStatus, 4000);
+});
+
+function switchView(viewName) {
+  currentView = viewName;
+  document.getElementById("view-command").classList.toggle("active", viewName === "command");
+  document.getElementById("view-docs").classList.toggle("active", viewName === "docs");
+  document.getElementById("tab-btn-command").classList.toggle("active", viewName === "command");
+  document.getElementById("tab-btn-docs").classList.toggle("active", viewName === "docs");
+
+  if (viewName === "docs") {
+    fetchDocuments();
+    fetchExtractedSchedules();
+  }
+}
+
+function refreshAll() {
   fetchSchedule();
   fetchTasks();
   fetchCourses();
   fetchAnnouncements();
+  if (currentView === "docs") {
+    fetchDocuments();
+    fetchExtractedSchedules();
+  }
+}
 
-  // Periodic poll for background sync status
-  setInterval(fetchStatus, 4000);
-});
+function changeTerm(newTerm) {
+  currentTerm = newTerm;
+  showToast(`Switched to Semester: ${newTerm}`);
+  refreshAll();
+}
 
 function showToast(msg) {
   const toast = document.getElementById("toast");
   toast.innerText = msg;
   toast.style.display = "block";
-  setTimeout(() => {
-    toast.style.display = "none";
-  }, 4000);
+  setTimeout(() => { toast.style.display = "none"; }, 4500);
 }
 
 async function fetchStatus() {
   try {
-    const res = await fetch("/api/status");
+    const res = await fetch(`/api/status?term=${currentTerm}`);
     const data = await res.json();
 
-    const bedrockBadge = document.getElementById("bedrock-badge");
+    const bBadge = document.getElementById("bedrock-badge");
     if (data.bedrock && data.bedrock.ready) {
-      bedrockBadge.className = "status-pill status-ready";
-      bedrockBadge.innerHTML = `<span class="dot"></span> Bedrock: Online (${data.bedrock.region})`;
+      bBadge.className = "status-pill status-ready";
+      bBadge.innerHTML = `<span class="dot"></span> Bedrock: Active (${data.bedrock.region})`;
     } else {
-      bedrockBadge.className = "status-pill status-error";
-      bedrockBadge.innerHTML = `<span class="dot"></span> Bedrock: Offline`;
+      bBadge.className = "status-pill status-ready";
+      bBadge.innerHTML = `<span class="dot"></span> Agent Core: Online (Hybrid Mode)`;
     }
 
-    const ntuBadge = document.getElementById("ntulearn-badge");
+    const nBadge = document.getElementById("ntulearn-badge");
     if (data.ntulearn_authenticated) {
-      ntuBadge.className = "status-pill status-ready";
-      ntuBadge.innerHTML = `<span class="dot"></span> NTULearn: Active`;
+      nBadge.className = "status-pill status-ready";
+      nBadge.innerHTML = `<span class="dot"></span> NTULearn: Connected`;
     } else {
-      ntuBadge.className = "status-pill status-loading";
-      ntuBadge.innerHTML = `<span class="dot"></span> NTULearn: Need Login`;
-      ntuBadge.onclick = triggerLogin;
-      ntuBadge.style.cursor = "pointer";
+      nBadge.className = "status-pill status-loading";
+      nBadge.innerHTML = `<span class="dot"></span> NTULearn: Not Logged In`;
+      nBadge.onclick = triggerLogin;
     }
 
     if (data.sync_job && data.sync_job.status === "running") {
-      document.getElementById("btn-sync").innerHTML = `<span class="btn-icon">⏳</span> Syncing...`;
-    } else {
-      document.getElementById("btn-sync").innerHTML = `<span class="btn-icon">🔄</span> Sync Blackboard`;
+      showToast("? " + data.sync_job.message);
     }
   } catch (err) {
-    console.error("Failed to fetch status:", err);
+    console.error("Status check failed:", err);
+  }
+}
+
+async function fetchTerms() {
+  try {
+    const res = await fetch("/api/terms");
+    const terms = await res.json();
+    const select = document.getElementById("term-select");
+    if (!select) return;
+
+    let html = `<option value="26S1" ${currentTerm === '26S1' ? 'selected' : ''}>26S1 (Current Active)</option>`;
+    for (const t of terms) {
+      if (t !== "26S1" && t !== "General") {
+        html += `<option value="${t}" ${currentTerm === t ? 'selected' : ''}>${t}</option>`;
+      }
+    }
+    html += `<option value="All" ${currentTerm === 'All' ? 'selected' : ''}>All Semesters</option>`;
+    select.innerHTML = html;
+  } catch (err) {
+    console.error("Failed to load terms:", err);
   }
 }
 
 async function triggerSync() {
-  showToast("Starting Blackboard sync...");
+  showToast("Syncing enrolled courses & announcements...");
   try {
-    const res = await fetch("/api/sync", { method: "POST" });
+    const res = await fetch(`/api/sync?term=${currentTerm}`, { method: "POST" });
     const data = await res.json();
-    if (data.message) {
-      showToast(data.message);
-      setTimeout(() => {
-        fetchCourses();
-        fetchAnnouncements();
-        fetchTasks();
-        fetchSchedule();
-      }, 3000);
-    }
+    if (data.message) showToast(data.message);
+    setTimeout(refreshAll, 3000);
   } catch (err) {
     showToast("Error triggering sync: " + err);
   }
@@ -661,22 +920,60 @@ async function triggerLogin() {
   }
 }
 
+async function triggerCrawl() {
+  showToast("Crawling all Blackboard modules for course materials...");
+  try {
+    const res = await fetch(`/api/materials/crawl?term=${currentTerm}`, { method: "POST" });
+    const data = await res.json();
+    showToast(data.message);
+    setTimeout(fetchDocuments, 4000);
+  } catch (err) {
+    showToast("Error: " + err);
+  }
+}
+
+async function triggerDownloadAll() {
+  showToast("Starting batch download of all documents...");
+  try {
+    const res = await fetch(`/api/materials/download-all?term=${currentTerm}`, { method: "POST" });
+    const data = await res.json();
+    showToast(data.message);
+  } catch (err) {
+    showToast("Error: " + err);
+  }
+}
+
+async function triggerParseAll() {
+  showToast("Starting AWS Bedrock document classification & schedule extraction...");
+  try {
+    const res = await fetch(`/api/materials/parse-all`, { method: "POST" });
+    const data = await res.json();
+    showToast(data.message);
+    setTimeout(() => {
+      fetchDocuments();
+      fetchExtractedSchedules();
+    }, 4000);
+  } catch (err) {
+    showToast("Error: " + err);
+  }
+}
+
 async function fetchSchedule() {
   try {
-    const res = await fetch("/api/schedule");
+    const res = await fetch(`/api/schedule?term=${currentTerm}`);
     const schedule = await res.json();
     const container = document.getElementById("schedule-timeline");
     document.getElementById("schedule-counter").innerText = `${schedule.length} Blocks`;
 
     if (!schedule || schedule.length === 0) {
-      container.innerHTML = `<div class="empty-state">No scheduled blocks yet. Add tasks to populate your day!</div>`;
+      container.innerHTML = `<div class="empty-state">No scheduled blocks for ${currentTerm}. Add tasks or sync announcements to populate!</div>`;
       return;
     }
 
     container.innerHTML = schedule.map(item => `
       <div class="timeline-card">
         <div>
-          <div class="timeline-time">${item.start} — ${item.end} (${item.duration_mins}m)</div>
+          <div class="timeline-time">${item.start} - ${item.end} (${item.duration_mins}m)</div>
           <div class="timeline-title">${escapeHtml(item.title)}</div>
         </div>
         <span class="count-tag">${item.course_code || 'General'}</span>
@@ -689,12 +986,12 @@ async function fetchSchedule() {
 
 async function fetchTasks() {
   try {
-    const res = await fetch("/api/tasks");
+    const res = await fetch(`/api/tasks?term=${currentTerm}`);
     const tasks = await res.json();
     const container = document.getElementById("tasks-list");
 
     if (!tasks || tasks.length === 0) {
-      container.innerHTML = `<div class="empty-state">No tasks recorded yet. Click Sync to import!</div>`;
+      container.innerHTML = `<div class="empty-state">No active tasks for ${currentTerm}.</div>`;
       return;
     }
 
@@ -704,13 +1001,13 @@ async function fetchTasks() {
       return `
         <div class="task-item ${isCompleted ? 'completed' : ''}">
           <div style="display: flex; align-items: center;">
-            <button class="task-check-btn" onclick="toggleTask('${task.id}')">${isCompleted ? '✓' : ''}</button>
+            <button class="task-check-btn" onclick="toggleTask('${task.id}')">${isCompleted ? '&#10003;' : ''}</button>
             <div>
-              <div style="font-size: 0.85rem; font-weight: 500;">${escapeHtml(task.title)}</div>
-              <div style="font-size: 0.72rem; color: var(--text-muted);">${task.course_code || 'General'} • Due: ${task.due_date || 'None'}</div>
+              <div style="font-size: 0.84rem; font-weight: 500;">${escapeHtml(task.title)}</div>
+              <div style="font-size: 0.72rem; color: var(--text-muted);">${task.course_code || 'General'} &bull; Due: ${task.due_date || 'None'}</div>
             </div>
           </div>
-          <span class="priority-badge ${priorityClass}">★ ${task.priority_score}</span>
+          <span class="priority-badge ${priorityClass}">Score: ${task.priority_score}</span>
         </div>
       `;
     }).join("");
@@ -731,20 +1028,23 @@ async function toggleTask(taskId) {
 
 async function fetchCourses() {
   try {
-    const res = await fetch("/api/courses");
+    const res = await fetch(`/api/courses?term=${currentTerm}`);
     const courses = await res.json();
     const container = document.getElementById("courses-list");
     document.getElementById("courses-count").innerText = `${courses.length} Modules`;
 
     if (!courses || courses.length === 0) {
-      container.innerHTML = `<div class="empty-state">No modules synced yet. Click Sync Blackboard!</div>`;
+      container.innerHTML = `<div class="empty-state">No modules found. Click <strong>Sync Blackboard</strong> above!</div>`;
       return;
     }
 
     container.innerHTML = courses.map(c => `
-      <div class="course-card">
-        <div class="course-code">${escapeHtml(c.course_code)} <span class="badge-version">${c.term || 'General'}</span></div>
-        <div class="course-title">${escapeHtml(c.title)}</div>
+      <div class="course-card" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 10px 14px;">
+        <div style="display: flex; justify-content: space-between;">
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 0.76rem; font-weight: 700; color: var(--accent-cyan);">${escapeHtml(c.course_code)}</span>
+          <span class="badge-version">${c.term || 'General'}</span>
+        </div>
+        <div style="font-size: 0.82rem; font-weight: 600; margin-top: 2px;">${escapeHtml(c.title)}</div>
       </div>
     `).join("");
   } catch (err) {
@@ -754,27 +1054,149 @@ async function fetchCourses() {
 
 async function fetchAnnouncements() {
   try {
-    const res = await fetch("/api/announcements");
+    const res = await fetch(`/api/announcements?term=${currentTerm}`);
     const items = await res.json();
     const container = document.getElementById("announcements-feed");
 
     if (!items || items.length === 0) {
-      container.innerHTML = `<div class="empty-state">No announcements found.</div>`;
+      container.innerHTML = `<div class="empty-state">No announcements recorded for ${currentTerm}.</div>`;
       return;
     }
 
     container.innerHTML = items.map(a => `
-      <div class="announcement-card">
+      <div class="announcement-card" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 10px 14px;">
         <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
-          <span class="course-code">${escapeHtml(a.course_code || 'Module')}</span>
-          <span class="ann-date">${escapeHtml((a.posted_at || '').substring(0, 10))}</span>
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 0.74rem; font-weight: 700; color: var(--accent-cyan);">${escapeHtml(a.course_code || 'Module')}</span>
+          <span style="font-size: 0.7rem; color: var(--text-muted);">${escapeHtml((a.posted_at || '').substring(0, 10))}</span>
         </div>
         <div style="font-size: 0.82rem; font-weight: 600;">${escapeHtml(a.title)}</div>
-        <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">${escapeHtml((a.body || '').substring(0, 140))}...</p>
+        <p style="font-size: 0.74rem; color: var(--text-muted); margin-top: 4px;">${escapeHtml((a.body || '').substring(0, 140))}...</p>
       </div>
     `).join("");
   } catch (err) {
     console.error("Failed to fetch announcements:", err);
+  }
+}
+
+async function fetchDocuments() {
+  try {
+    const res = await fetch(`/api/materials/documents`);
+    allMaterialsCache = await res.json();
+    renderDocuments();
+  } catch (err) {
+    console.error("Failed to fetch documents:", err);
+  }
+}
+
+function filterDocs(type) {
+  activeDocFilter = type;
+  renderDocuments();
+}
+
+function renderDocuments() {
+  const container = document.getElementById("docs-list");
+  let filtered = allMaterialsCache;
+
+  if (activeDocFilter === "TUTORIAL") {
+    filtered = filtered.filter(m => (m.doc_type || '').includes('TUTORIAL') || (m.title || '').toLowerCase().includes('tut'));
+  } else if (activeDocFilter === "LECTURE") {
+    filtered = filtered.filter(m => (m.doc_type || '').includes('LECTURE') || (m.title || '').toLowerCase().includes('lec'));
+  } else if (activeDocFilter === "SYLLABUS") {
+    filtered = filtered.filter(m => (m.doc_type || '').includes('SYLLABUS') || (m.title || '').toLowerCase().includes('schedule'));
+  }
+
+  document.getElementById("docs-count").innerText = `${filtered.length} Documents`;
+
+  if (!filtered || filtered.length === 0) {
+    container.innerHTML = `<div class="empty-state">No documents match the selected filter. Click Crawl or Download All!</div>`;
+    return;
+  }
+
+  container.innerHTML = filtered.map(m => {
+    let tagClass = "tag-tutorial-q";
+    let tagLabel = m.doc_type || "DOCUMENT";
+    if (tagLabel === "TUTORIAL_QUESTION") { tagClass = "tag-tutorial-q"; tagLabel = "Tutorial Q"; }
+    else if (tagLabel === "TUTORIAL_SOLUTION") { tagClass = "tag-tutorial-sol"; tagLabel = "Tutorial Sol"; }
+    else if (tagLabel === "LECTURE_SLIDES") { tagClass = "tag-lecture"; tagLabel = "Lecture Slides"; }
+    else if (tagLabel === "SYLLABUS_SCHEDULE") { tagClass = "tag-syllabus"; tagLabel = "Syllabus"; }
+
+    const isDownloaded = m.downloaded && m.local_path;
+    const openBtn = isDownloaded
+      ? `<a href="/api/materials/file/${m.id}" target="_blank" class="btn btn-sm btn-cyan">&#128196; Open PDF</a>`
+      : (m.download_url ? `<button class="btn btn-sm btn-outline" onclick="downloadSingle('${m.id}', '${m.course_code}', '${escapeHtml(m.title)}', '${m.download_url}')">&#11015; Download</button>` : `<span class="count-tag">No Link</span>`);
+
+    const sizeStr = m.file_size ? `${(m.file_size / (1024 * 1024)).toFixed(1)} MB` : '';
+
+    return `
+      <div class="doc-card">
+        <div style="flex: 1; min-width: 0;">
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+            <span class="doc-tag ${tagClass}">${tagLabel}</span>
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; color: var(--accent-cyan); font-weight: 600;">${escapeHtml(m.course_code || 'General')}</span>
+            ${sizeStr ? `<span style="font-size: 0.7rem; color: var(--text-muted);">${sizeStr}</span>` : ''}
+          </div>
+          <div style="font-size: 0.84rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(m.title)}</div>
+        </div>
+        <div>
+          ${openBtn}
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+async function downloadSingle(id, course_code, title, download_url) {
+  showToast(`Downloading ${title}...`);
+  try {
+    const res = await fetch("/api/download/material", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mat_id: id, course_code, title, download_url })
+    });
+    const data = await res.json();
+    showToast(data.message);
+    setTimeout(fetchDocuments, 3000);
+  } catch (err) {
+    showToast("Error downloading: " + err);
+  }
+}
+
+async function fetchExtractedSchedules() {
+  try {
+    const res = await fetch("/api/materials/schedule");
+    const events = await res.json();
+    const container = document.getElementById("syllabus-timeline");
+    document.getElementById("schedule-event-counter").innerText = `${events.length} Milestones`;
+
+    if (!events || events.length === 0) {
+      container.innerHTML = `<div class="empty-state">No schedule items extracted yet. Run the AI Classifier on lecture slides!</div>`;
+      return;
+    }
+
+    container.innerHTML = events.map(e => {
+      let eventClass = "event-lecture";
+      let eventBadge = "LECTURE";
+      if (e.event_type === "tutorial") { eventClass = "event-tutorial"; eventBadge = "TUTORIAL"; }
+      else if (e.event_type === "exam" || e.event_type === "ca_quiz") { eventClass = "event-exam"; eventBadge = "ASSESSMENT"; }
+
+      return `
+        <div class="schedule-event-card ${eventClass}">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 0.7rem; font-family: 'JetBrains Mono', monospace; font-weight: 700; color: var(--accent-cyan);">
+              WEEK ${e.week_number > 0 ? e.week_number : 'SEMESTER'} &bull; ${escapeHtml(e.course_code)}
+            </span>
+            <span class="count-tag">${eventBadge}</span>
+          </div>
+          <div style="font-size: 0.84rem; font-weight: 600; margin: 4px 0;">${escapeHtml(e.title)}</div>
+          <div style="font-size: 0.74rem; color: var(--text-muted); display: flex; justify-content: space-between;">
+            <span>${escapeHtml(e.event_date || '')}</span>
+            <span>${escapeHtml(e.notes || '')}</span>
+          </div>
+        </div>
+      `;
+    }).join("");
+  } catch (err) {
+    console.error("Failed to load extracted schedules:", err);
   }
 }
 
@@ -795,12 +1217,12 @@ async function handleChatSubmit(e) {
     const res = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message }),
+      body: JSON.stringify({ message, term: currentTerm }),
     });
     const data = await res.json();
     appendChatMessage("assistant", data.reply, data.agent || "Lead Orchestrator");
   } catch (err) {
-    appendChatMessage("assistant", "⚠️ Error reaching multi-agent backend: " + err, "System");
+    appendChatMessage("assistant", "Error reaching multi-agent backend: " + err, "System");
   } finally {
     sendBtn.disabled = false;
     sendBtn.innerText = "Send";
@@ -816,21 +1238,45 @@ function appendChatMessage(role, content, senderName) {
   const container = document.getElementById("chat-messages");
   const bubble = document.createElement("div");
   bubble.className = `chat-bubble ${role}`;
+
+  // Parse [OPEN_DOC:id:title] into clickable badge
+  let renderedContent = escapeHtml(content);
+  renderedContent = renderedContent.replace(/\[OPEN_DOC:([^:]+):([^\]]+)\]/g, (match, docId, docTitle) => {
+    return `<br><a href="/api/materials/file/${docId}" target="_blank" class="doc-badge-link"><span style="font-size: 1.1rem;">&#128196;</span> Open Document: <strong>${docTitle}</strong> (PDF)</a><br>`;
+  });
+
+  // Unescape subagent callout cards
+  renderedContent = renderedContent.replace(/&lt;div class=&quot;subagent-callout-card&quot;&gt;/g, '<div class="subagent-callout-card">');
+  renderedContent = renderedContent.replace(/&lt;div class=&quot;subagent-header&quot;&gt;/g, '<div class="subagent-header">');
+  renderedContent = renderedContent.replace(/&lt;span class=&quot;subagent-pulse&quot;&gt;&lt;\/span&gt;/g, '<span class="subagent-pulse"></span>');
+  renderedContent = renderedContent.replace(/&lt;strong&gt;/g, '<strong>').replace(/&lt;\/strong&gt;/g, '</strong>');
+  renderedContent = renderedContent.replace(/&lt;div class=&quot;subagent-body&quot;&gt;/g, '<div class="subagent-body">');
+  renderedContent = renderedContent.replace(/&lt;em&gt;/g, '<em>').replace(/&lt;\/em&gt;/g, '</em>');
+  renderedContent = renderedContent.replace(/&lt;code&gt;/g, '<code>').replace(/&lt;\/code&gt;/g, '</code>');
+  renderedContent = renderedContent.replace(/&lt;br&gt;/g, '<br>');
+  renderedContent = renderedContent.replace(/&lt;\/div&gt;/g, '</div>');
+
+  // Basic markdown header/bold formatting
+  renderedContent = renderedContent.replace(/### (.*?)\n/g, '<h4 style="color: var(--accent-cyan); margin: 6px 0;">$1</h4>');
+  renderedContent = renderedContent.replace(/#### (.*?)\n/g, '<h5 style="color: var(--text-main); margin: 4px 0;">$1</h5>');
+  renderedContent = renderedContent.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  renderedContent = renderedContent.replace(/`([^`]+)`/g, '<code style="font-family: monospace; background: rgba(255,255,255,0.08); padding: 1px 5px; border-radius: 4px;">$1</code>');
+
   bubble.innerHTML = `
     <div class="sender-tag">${escapeHtml(senderName)}</div>
-    <div style="white-space: pre-wrap;">${escapeHtml(content)}</div>
+    <div style="white-space: pre-wrap; line-height: 1.6;">${renderedContent}</div>
   `;
   container.appendChild(bubble);
   container.scrollTop = container.scrollHeight;
 }
 
 function openAddTaskModal() {
-  const title = prompt("Enter new task title:");
+  const title = prompt(`Enter new task for ${currentTerm}:`);
   if (title) {
     fetch("/api/tasks", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, priority_score: 7.0 }),
+      body: JSON.stringify({ title, term: currentTerm, priority_score: 7.0 }),
     }).then(() => {
       fetchTasks();
       fetchSchedule();
@@ -846,7 +1292,6 @@ function escapeHtml(str) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
 }
-
-</script>
+  </script>
 </body>
 </html>

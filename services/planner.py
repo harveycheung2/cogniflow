@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 import re
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import core.database as db
 
 def calculate_priority(due_date_str: str, estimated_mins: int = 60, is_graded: bool = True) -> float:
@@ -30,16 +30,20 @@ def calculate_priority(due_date_str: str, estimated_mins: int = 60, is_graded: b
     except Exception:
         return base_score
 
-def extract_tasks_from_announcements():
-    announcements = db.get_announcements(limit=50)
+def extract_tasks_from_announcements(term: str = "26S1"):
+    """Extract action items exclusively for the active term."""
+    db.clear_announcement_tasks()
+    announcements = db.get_announcements(term=term, limit=60)
+    
     deadline_patterns = [
         (r'\b(?:homework|hw)\b', 8.5, 60),
-        (r'\b(?:ca1|ca2|continuous assessment)\b', 9.0, 90),
-        (r'\b(?:quiz|test|exam)\b', 9.2, 90),
-        (r'\b(?:lab|laboratory|grouping)\b', 7.5, 60),
-        (r'\b(?:tutorial|sheet)\b', 7.0, 45),
-        (r'\b(?:due|submit|deadline|submission)\b', 8.8, 60),
-        (r'\b(?:project|milestone|presentation)\b', 8.0, 120),
+        (r'\b(?:ca1|ca2|continuous assessment)\b', 9.2, 90),
+        (r'\b(?:quiz|test|exam)\b', 9.5, 90),
+        (r'\b(?:lab|laboratory|grouping|slots)\b', 7.8, 60),
+        (r'\b(?:tutorial|sheet|venue)\b', 7.2, 45),
+        (r'\b(?:due|submit|deadline|submission)\b', 8.9, 60),
+        (r'\b(?:project|milestone|presentation)\b', 8.2, 120),
+        (r'\b(?:lecture slides|notes|reading)\b', 6.5, 45),
     ]
 
     for ann in announcements:
@@ -59,9 +63,10 @@ def extract_tasks_from_announcements():
 
         if matched:
             task_id = f"ann_{ann.get('id')}"
-            clean_title = title.replace("IMP/", "").replace("IMP:", "").strip()
+            clean_title = title.replace("IMP/", "").replace("IMP:", "").replace("Resend:", "").strip()
             course_code = ann.get("course_code", "")
-            
+
+            # Attempt to extract date e.g. September 9, 2026
             date_match = re.search(r'([A-Za-z]+\s+\d{1,2}(?:,\s*\d{4})?)', text)
             if date_match:
                 due_date = date_match.group(1)
@@ -73,17 +78,18 @@ def extract_tasks_from_announcements():
                 title=f"Action: {clean_title[:80]}",
                 source="ntulearn",
                 course_code=course_code,
+                term=term,
                 due_date=due_date,
                 estimated_minutes=est_mins,
                 priority_score=priority,
                 notes=body[:200],
             )
 
-def generate_day_schedule(available_hours: float = 6.0) -> List[Dict[str, Any]]:
-    pending = db.get_tasks(status="pending")
+def generate_day_schedule(term: str = "26S1", available_hours: float = 6.0) -> List[Dict[str, Any]]:
+    pending = db.get_tasks(term=term, status="pending")
     if not pending:
-        extract_tasks_from_announcements()
-        pending = db.get_tasks(status="pending")
+        extract_tasks_from_announcements(term=term)
+        pending = db.get_tasks(term=term, status="pending")
 
     schedule = []
     current_time = datetime.now().replace(hour=9, minute=0, second=0, microsecond=0)

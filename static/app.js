@@ -1,15 +1,28 @@
-// Agentic Workday OS v2 Frontend Controller
+// Agentic Workday OS v2 Frontend Controller with Semester Scope
+
+let currentTerm = "26S1";
 
 document.addEventListener("DOMContentLoaded", () => {
+  fetchTerms();
   fetchStatus();
-  fetchSchedule();
-  fetchTasks();
-  fetchCourses();
-  fetchAnnouncements();
+  refreshAll();
 
   // Periodic poll for background sync status
   setInterval(fetchStatus, 4000);
 });
+
+function refreshAll() {
+  fetchSchedule();
+  fetchTasks();
+  fetchCourses();
+  fetchAnnouncements();
+}
+
+function changeTerm(newTerm) {
+  currentTerm = newTerm;
+  showToast(`Switched view to Semester: ${newTerm}`);
+  refreshAll();
+}
 
 function showToast(msg) {
   const toast = document.getElementById("toast");
@@ -20,9 +33,29 @@ function showToast(msg) {
   }, 4000);
 }
 
+async function fetchTerms() {
+  try {
+    const res = await fetch("/api/terms");
+    const terms = await res.json();
+    const select = document.getElementById("term-select");
+    if (!select) return;
+
+    let html = `<option value="26S1" ${currentTerm === '26S1' ? 'selected' : ''}>26S1 (Current Active)</option>`;
+    for (const t of terms) {
+      if (t !== "26S1" && t !== "General") {
+        html += `<option value="${t}" ${currentTerm === t ? 'selected' : ''}>${t}</option>`;
+      }
+    }
+    html += `<option value="All" ${currentTerm === 'All' ? 'selected' : ''}>All Semesters</option>`;
+    select.innerHTML = html;
+  } catch (err) {
+    console.error("Failed to load terms:", err);
+  }
+}
+
 async function fetchStatus() {
   try {
-    const res = await fetch("/api/status");
+    const res = await fetch(`/api/status?term=${currentTerm}`);
     const data = await res.json();
 
     const bedrockBadge = document.getElementById("bedrock-badge");
@@ -56,18 +89,13 @@ async function fetchStatus() {
 }
 
 async function triggerSync() {
-  showToast("Starting Blackboard sync...");
+  showToast(`Syncing Blackboard for ${currentTerm}...`);
   try {
-    const res = await fetch("/api/sync", { method: "POST" });
+    const res = await fetch(`/api/sync?term=${currentTerm}`, { method: "POST" });
     const data = await res.json();
     if (data.message) {
       showToast(data.message);
-      setTimeout(() => {
-        fetchCourses();
-        fetchAnnouncements();
-        fetchTasks();
-        fetchSchedule();
-      }, 3000);
+      setTimeout(refreshAll, 3000);
     }
   } catch (err) {
     showToast("Error triggering sync: " + err);
@@ -85,13 +113,13 @@ async function triggerLogin() {
 
 async function fetchSchedule() {
   try {
-    const res = await fetch("/api/schedule");
+    const res = await fetch(`/api/schedule?term=${currentTerm}`);
     const schedule = await res.json();
     const container = document.getElementById("schedule-timeline");
     document.getElementById("schedule-counter").innerText = `${schedule.length} Blocks`;
 
     if (!schedule || schedule.length === 0) {
-      container.innerHTML = `<div class="empty-state">No scheduled blocks yet. Add tasks to populate your day!</div>`;
+      container.innerHTML = `<div class="empty-state">No scheduled blocks for ${currentTerm}. Add tasks to populate your day!</div>`;
       return;
     }
 
@@ -111,12 +139,12 @@ async function fetchSchedule() {
 
 async function fetchTasks() {
   try {
-    const res = await fetch("/api/tasks");
+    const res = await fetch(`/api/tasks?term=${currentTerm}`);
     const tasks = await res.json();
     const container = document.getElementById("tasks-list");
 
     if (!tasks || tasks.length === 0) {
-      container.innerHTML = `<div class="empty-state">No tasks recorded yet. Click Sync to import!</div>`;
+      container.innerHTML = `<div class="empty-state">No active tasks for ${currentTerm}.</div>`;
       return;
     }
 
@@ -153,13 +181,13 @@ async function toggleTask(taskId) {
 
 async function fetchCourses() {
   try {
-    const res = await fetch("/api/courses");
+    const res = await fetch(`/api/courses?term=${currentTerm}`);
     const courses = await res.json();
     const container = document.getElementById("courses-list");
     document.getElementById("courses-count").innerText = `${courses.length} Modules`;
 
     if (!courses || courses.length === 0) {
-      container.innerHTML = `<div class="empty-state">No modules synced yet. Click Sync Blackboard!</div>`;
+      container.innerHTML = `<div class="empty-state">No modules found for ${currentTerm}. Click Sync Blackboard!</div>`;
       return;
     }
 
@@ -176,12 +204,12 @@ async function fetchCourses() {
 
 async function fetchAnnouncements() {
   try {
-    const res = await fetch("/api/announcements");
+    const res = await fetch(`/api/announcements?term=${currentTerm}`);
     const items = await res.json();
     const container = document.getElementById("announcements-feed");
 
     if (!items || items.length === 0) {
-      container.innerHTML = `<div class="empty-state">No announcements found.</div>`;
+      container.innerHTML = `<div class="empty-state">No announcements recorded for ${currentTerm}.</div>`;
       return;
     }
 
@@ -217,7 +245,7 @@ async function handleChatSubmit(e) {
     const res = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message }),
+      body: JSON.stringify({ message, term: currentTerm }),
     });
     const data = await res.json();
     appendChatMessage("assistant", data.reply, data.agent || "Lead Orchestrator");
@@ -247,12 +275,12 @@ function appendChatMessage(role, content, senderName) {
 }
 
 function openAddTaskModal() {
-  const title = prompt("Enter new task title:");
+  const title = prompt(`Enter new task for ${currentTerm}:`);
   if (title) {
     fetch("/api/tasks", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, priority_score: 7.0 }),
+      body: JSON.stringify({ title, term: currentTerm, priority_score: 7.0 }),
     }).then(() => {
       fetchTasks();
       fetchSchedule();
