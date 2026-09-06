@@ -13,17 +13,18 @@ LEAD_SYSTEM_PROMPT = """You are the Lead Orchestrator of Agentic Workday OS v2.
 You supervise multiple specialized sub-agents to organize the student's academic life for Semester 1 (26S1).
 
 Available Sub-Agents to Delegate to:
-1. `task_document_specialist`: Inspects course slides, searches tutorial documents, extracts semester schedules, and retrieves specific PDF materials.
+1. `task_document_specialist`: Inspects course slides, searches tutorial documents, extracts semester schedules, and retrieves specific PDF materials or test/exam information.
 2. `task_planner_agent`: Generates optimized time-blocked study schedules and calculates urgency priority scores.
-3. `task_ntulearn_specialist`: Checks recent announcements, CA deadlines, and course notices.
+3. `task_ntulearn_specialist`: Checks recent announcements, CA deadlines, test venues, and course notices.
 
 Guidelines:
-- Whenever the student asks "what do I need to do", "which tutorial do I need", or asks about course content/schedules, ALWAYS task the `task_document_specialist` to inspect the course documents first.
-- When you receive the Document Specialist's findings, cite the exact tutorial name and include the clickable action token:
+- **Conversation Context Preservation**: Always remember context across conversation turns. If the student previously asked about a specific module (e.g., MH2500 Probability) and then follows up with questions like "what is tested in test 1?", "when is it?", or "give me practice problems", automatically relate the query to the course being discussed without asking for re-clarification.
+- **Sub-Agent Delegation**: Whenever the student asks "what do I need to do", "which tutorial do I need", or asks about course content/schedules/tests, delegate to `task_document_specialist` and `task_ntulearn_specialist` to inspect the actual course documents and notices first.
+- When you receive the Document Specialist's findings, cite the exact tutorial or test document name and include the clickable action token:
   `[OPEN_DOC:<material_id>:<Document Title>]`
 - Structure your response cleanly with:
   - 🎯 **Immediate Priority & What to do now**
-  - 📄 **Exact Tutorial PDF Required & Action Link**
+  - 📄 **Exact Tutorial / Test PDF Required & Action Link**
   - 📅 **Semester Schedule & Milestones**
   - 💡 **Recommended Study Plan**
 - Professional, encouraging, and clear executive tone.
@@ -33,23 +34,23 @@ TOOL_DEFINITIONS = [
     {
         "toolSpec": {
             "name": "task_document_specialist",
-            "description": "Task the Document Specialist Sub-Agent to inspect, analyze, or search course documents, lecture slides, syllabus timetables, and tutorial question/solution sheets for a course.",
+            "description": "Task the Document Specialist Sub-Agent to inspect, analyze, or search course documents, lecture slides, syllabus timetables, assessment prep, and tutorial question/solution sheets for a course.",
             "inputSchema": {
                 "json": {
                     "type": "object",
                     "properties": {
                         "course_code": {
                             "type": "string",
-                            "description": "Course code or keyword, e.g. 'MS3013', 'BS1016', 'MS3011', 'MS3012', 'MS3082', 'HW0288'"
+                            "description": "Course code or keyword, e.g. 'MH2500', 'SC2001', 'SC2207', 'MH2802', 'CC0006'"
                         },
                         "task_type": {
                             "type": "string",
-                            "enum": ["find_tutorial_pdf", "extract_schedule", "inspect_lecture_slides", "get_solutions", "general_search"],
+                            "enum": ["find_tutorial_pdf", "extract_schedule", "inspect_lecture_slides", "get_solutions", "find_test_or_exam", "general_search"],
                             "description": "Specific intent for the document agent"
                         },
                         "detail": {
                             "type": "string",
-                            "description": "Description of what specific tutorial or information is required"
+                            "description": "Description of what specific tutorial, test, or information is required"
                         }
                     },
                     "required": ["course_code", "task_type"]
@@ -108,17 +109,48 @@ def execute_subagent_tool(name: str, args: Dict[str, Any], term: str = "26S1") -
         task_type = args.get("task_type", "general_search")
         detail = args.get("detail", "")
 
-        # Find matching materials in DB
-        matching_mats = db.find_matching_tutorials(course_code=course_code)
-        if not matching_mats:
-            matching_mats = db.get_all_materials(course_code=course_code)
+        # Clean course code (e.g. MH2500 from 26S1-MH2500-LEC)
+        clean_code = re.search(r'\b([A-Z]{2,4}\d{4}[A-Z]?)\b', course_code)
+        target_code = clean_code.group(1) if clean_code else course_code
+
+        all_mats = db.get_all_materials(course_code=target_code)
+
+        # Check if looking specifically for tests, exams, mock tests, or assessment
+        is_test_query = any(w in f"{task_type} {detail}".lower() for w in ["test", "exam", "quiz", "mock", "ca1", "ca2", "assessment"])
+        is_syllabus_query = any(w in f"{task_type} {detail}".lower() for w in ["syllabus", "schedule", "timetable", "outline", "hand00"])
+
+        if is_test_query:
+            matching_mats = [
+                m for m in all_mats
+                if any(w in m.get("title", "").lower() for w in ["test", "mock", "exam", "quiz", "ca1", "ca2"])
+            ]
+            if not matching_mats:
+                matching_mats = all_mats
+        elif is_syllabus_query:
+            matching_mats = [
+                m for m in all_mats
+                if any(w in m.get("title", "").lower() for w in ["hand00", "syllabus", "schedule", "outline", "overview", "lec 1", "lecture 1"])
+            ]
+            if not matching_mats:
+                matching_mats = all_mats
+        else:
+            matching_mats = db.find_matching_tutorials(course_code=target_code)
+            if not matching_mats:
+                matching_mats = all_mats
 
         # Ensure key materials are analyzed if not yet analyzed
         for m in matching_mats[:4]:
             if not db.get_parsed_documents(course_code=m.get("course_code")):
                 document_agent.analyze_document(m["id"])
 
-        schedules = db.get_course_schedules(course_code=course_code)
+        schedules = db.get_course_schedules(course_code=target_code)
+
+        # Also retrieve course announcements for additional context
+        anns = db.get_announcements(term=term, limit=15)
+        course_anns = [
+            a for a in anns
+            if target_code.upper() in a.get("course_code", "").upper()
+        ]
 
         docs_summary = [
             {
@@ -131,14 +163,27 @@ def execute_subagent_tool(name: str, args: Dict[str, Any], term: str = "26S1") -
             for m in matching_mats[:8]
         ]
 
+        finding_notes = []
+        if is_test_query and matching_mats:
+            test_titles = [m['title'] for m in matching_mats if any(k in m['title'].lower() for k in ['test', 'mock', 'exam'])]
+            if test_titles:
+                finding_notes.append(f"Identified test materials: {', '.join(test_titles[:3])}")
+        
+        test_anns = [a['title'] for a in course_anns if any(k in a['title'].lower() for k in ['test', 'venue', 'quiz', 'exam'])]
+        if test_anns:
+            finding_notes.append(f"Relevant notices: {', '.join(test_anns[:2])}")
+
+        finding_str = f"Found {len(docs_summary)} matching documents for {target_code}. " + (" ".join(finding_notes) if finding_notes else f"Extracted {len(schedules)} semester milestones.")
+
         return {
             "subagent": "Document Specialist Agent",
             "status": "completed",
-            "course_code": course_code,
+            "course_code": target_code,
             "task_type": task_type,
             "documents_found": docs_summary,
             "schedules_extracted": schedules[:8],
-            "finding": f"Inspected {len(docs_summary)} documents for {course_code}. Extracted {len(schedules)} semester milestones and schedule events."
+            "relevant_notices": [{"title": a["title"], "date": a.get("posted_at", "")} for a in course_anns[:3]],
+            "finding": finding_str
         }
 
     elif name == "task_planner_agent":
@@ -151,7 +196,8 @@ def execute_subagent_tool(name: str, args: Dict[str, Any], term: str = "26S1") -
             "available_hours": hours,
             "scheduled_blocks": schedule[:6],
             "pending_tasks_count": len(tasks),
-            "top_tasks": [t["title"] for t in tasks[:5]]
+            "top_tasks": [t["title"] for t in tasks[:5]],
+            "finding": f"Optimized {len(schedule)} focus blocks ({hours}h available) across {len(tasks)} prioritized tasks."
         }
 
     elif name == "task_ntulearn_specialist":
@@ -162,27 +208,54 @@ def execute_subagent_tool(name: str, args: Dict[str, Any], term: str = "26S1") -
         return {
             "subagent": "NTULearn Specialist",
             "status": "completed",
+            "course_code": course_code,
             "announcements": [
                 {"title": a["title"], "course": a.get("course_code"), "posted": a.get("posted_at")}
                 for a in announcements[:6]
-            ]
+            ],
+            "finding": f"Checked notices for {course_code or 'active semester'}: found {len(announcements)} updates."
         }
 
     return {"error": f"Unknown tool {name}"}
 
-def execute_chat_query(user_query: str, term: str = "26S1") -> Dict[str, Any]:
+def execute_chat_query(user_query: str, term: str = "26S1", session_id: str = "default") -> Dict[str, Any]:
     courses = db.get_all_courses(term=term)
-    courses_str = ", ".join([f"{c['course_code']} ({c['title']})" for c in courses])
+    courses_str = ", ".join([f"{c['course_code']} ({c.get('title') or c['course_code']})" for c in courses])
 
-    initial_context = f"""Current Date: {datetime.now().strftime('%d %B %Y')} (AY2026/27 Semester 1 - Week 4/5)
+    # ── Multi-turn history retrieval ──────────────────────────────────────────
+    history = db.get_chat_history(session_id=session_id, limit=8)
+    messages: List[Dict[str, Any]] = []
+
+    for h in history:
+        r = h.get("role", "user")
+        txt = h.get("content", "").strip()
+        # Strip internal HTML tags and callout cards so model sees clean semantic text
+        txt = re.sub(r'<div class="subagent-[^"]*">.*?</div>', '', txt, flags=re.DOTALL)
+        txt = re.sub(r'<[^>]+>', '', txt).strip()
+        if not txt:
+            continue
+
+        # Bedrock requires alternating roles (user, assistant, user, assistant...)
+        if messages and messages[-1]["role"] == r:
+            messages[-1]["content"][0]["text"] += f"\n\n{txt}"
+        else:
+            messages.append({"role": r, "content": [{"text": txt}]})
+
+    # Ensure messages array starts with a 'user' turn
+    while messages and messages[0]["role"] != "user":
+        messages.pop(0)
+
+    # Current context grounding
+    current_context = f"""Current Date: {datetime.now().strftime('%d %B %Y')} (AY2026/27 Semester 1 - Week 4/5)
+Active Term: {term}
 Enrolled Modules: {courses_str}
 
-Student Question: {user_query}
-"""
+Student Question: {user_query}"""
 
-    messages = [
-        {"role": "user", "content": [{"text": initial_context}]}
-    ]
+    if messages and messages[-1]["role"] == "user":
+        messages[-1]["content"][0]["text"] += f"\n\nFollow-up Question: {user_query}"
+    else:
+        messages.append({"role": "user", "content": [{"text": current_context}]})
 
     delegation_steps = []
     final_reply = ""
@@ -227,7 +300,7 @@ Student Question: {user_query}
                                 "agent": subagent_out.get("subagent", t_name),
                                 "action": f"Delegated to {t_name}",
                                 "input": t_input,
-                                "result_summary": subagent_out.get("finding") or str(subagent_out)[:160]
+                                "result_summary": subagent_out.get("finding") or str(subagent_out)[:140]
                             })
 
                             tool_result_contents.append({
@@ -255,13 +328,14 @@ Student Question: {user_query}
 
     # If offline or fallback
     if not final_reply or "Bedrock tool execution error" in final_reply:
-        # Fallback offline simulation
-        subagent_res = execute_subagent_tool("task_document_specialist", {"course_code": "MS3013", "task_type": "find_tutorial_pdf"}, term=term)
+        # Dynamic fallback based on active courses
+        primary_course = courses[0]["course_code"] if courses else "General"
+        subagent_res = execute_subagent_tool("task_document_specialist", {"course_code": primary_course, "task_type": "general_search"}, term=term)
         delegation_steps.append({
-            "agent": "Document Specialist Sub-Agent",
-            "action": "Tasked to inspect MS3013 Lecture 1 timetable and Tutorial 1 questions",
-            "input": {"course_code": "MS3013"},
-            "result_summary": "Extracted Week 2 (17 Aug) T1 and identified ELECTROCHEMICAL CORROSION - T1.pdf"
+            "agent": "Document Specialist Agent",
+            "action": f"Inspected course materials for {primary_course}",
+            "input": {"course_code": primary_course},
+            "result_summary": f"Found {len(subagent_res.get('documents_found', []))} materials for {primary_course}"
         })
         matched_tut = subagent_res["documents_found"][0] if subagent_res.get("documents_found") else None
         doc_token = f"[OPEN_DOC:{matched_tut['id']}:{matched_tut['title']}]" if matched_tut else ""
@@ -270,48 +344,36 @@ Student Question: {user_query}
 
 You are currently in **Week 4/5 of Semester 1 (AY2026/27)**.
 
-#### 📄 Exact Tutorial PDF Required:
+#### 📄 Course Materials & Documents:
 {doc_token}
 
-- **Document:** `{matched_tut['title'] if matched_tut else 'ELECTROCHEMICAL CORROSION - T1.pdf'}`
-- **Course:** **MS3013 Electrochemical Corrosion**
-- **Action:** Work through electrochemical cell kinetics, Nernst potential equations, and Faraday's corrosion rate laws.
+- **Active Module:** **{primary_course}**
+- **Action:** Review active lecture handouts and complete this week's tutorial questions.
 
----
+Click the **Open Document** link above to inspect your materials."""
 
-### 📅 Extracted Lecture 1 Timetable:
-- **Week 1 (13 Aug):** Lecture 1&2
-- **Week 2 (17 Aug):** Lecture 3&4 + **Tutorial 1 (T1)**
-- **Week 3 (24 Aug):** Lecture 5&6 + **Tutorial 2 (T2)**
-- **Week 4 (31 Aug):** Lecture 7&8 + **Tutorial 3 (T3)**
-- **Week 5 (07 Sept):** Lecture 9&10 + **Tutorial 4 (T4)**
-- **Week 7 (21 Sept):** **CA1 Exam** (LT6 3:30-5:30pm, 60% weightage)
-
-Click the **Open Document** button above to view your tutorial PDF immediately."""
-
-    # Build visible Sub-Agent Delegation Callout block to prepend to reply
+    # Build visible compact Sub-Agent Delegation badges
     delegation_callout = ""
     if delegation_steps:
-        sub_items = ""
+        sub_badges = []
         for s in delegation_steps:
-            sub_items += f"""
-<div class="subagent-callout-card">
-  <div class="subagent-header">
-    <span class="subagent-pulse"></span>
-    <strong>⚡ Sub-Agent Tasked: {s['agent']}</strong>
-  </div>
-  <div class="subagent-body">
-    <em>Input:</em> <code>{json.dumps(s['input'])}</code><br>
-    <em>Findings:</em> {s['result_summary']}
-  </div>
-</div>
-"""
-        delegation_callout = f"{sub_items}\n\n"
+            agent_title = s.get("agent", "Specialist Agent")
+            summary = s.get("result_summary", "")
+            if len(summary) > 130:
+                summary = summary[:127] + "..."
+            sub_badges.append(
+                f'<div class="subagent-compact-badge">'
+                f'<span class="subagent-pulse"></span>'
+                f'<span class="subagent-badge-title">⚡ {agent_title}:</span> '
+                f'<span class="subagent-badge-desc">{summary}</span>'
+                f'</div>'
+            )
+        delegation_callout = "".join(sub_badges) + "\n\n"
 
     composed_reply = f"{delegation_callout}{final_reply}"
 
-    db.save_chat_message("user", user_query, agent_name="User")
-    db.save_chat_message("assistant", composed_reply, agent_name="Lead Orchestrator")
+    db.save_chat_message("user", user_query, agent_name="User", session_id=session_id)
+    db.save_chat_message("assistant", composed_reply, agent_name="Lead Orchestrator", session_id=session_id)
 
     return {
         "reply": composed_reply,

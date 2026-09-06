@@ -581,55 +581,89 @@ body {
   z-index: 1000;
 }
   
-/* Sub-Agent Delegation Cards in Chat */
-.subagent-callout-card {
-  background: rgba(0, 242, 254, 0.05);
-  border: 1px solid rgba(0, 242, 254, 0.35);
-  border-left: 3px solid var(--accent-cyan);
-  border-radius: var(--radius-md);
-  padding: 10px 14px;
-  margin: 8px 0 12px 0;
-  font-size: 0.8rem;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
-}
-
-.subagent-header {
-  display: flex;
+/* Compact Sub-Agent Delegation Badges */
+.subagent-compact-badge {
+  display: inline-flex;
   align-items: center;
   gap: 8px;
+  background: rgba(0, 242, 254, 0.06);
+  border: 1px solid rgba(0, 242, 254, 0.28);
+  border-radius: 20px;
+  padding: 4px 12px;
+  margin: 4px 6px 8px 0;
+  font-size: 0.76rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.subagent-badge-title {
   color: var(--accent-cyan);
   font-weight: 700;
-  margin-bottom: 4px;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
+}
+
+.subagent-badge-desc {
+  color: var(--text-muted);
+  font-size: 0.74rem;
 }
 
 .subagent-pulse {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
   background: var(--accent-cyan);
   border-radius: 50%;
-  box-shadow: 0 0 10px var(--accent-cyan);
+  box-shadow: 0 0 8px var(--accent-cyan);
   display: inline-block;
-  animation: pulse-glow 1.5s infinite alternate;
+  animation: pulse-glow 1.2s infinite alternate;
 }
 
 @keyframes pulse-glow {
-  from { opacity: 0.4; transform: scale(0.9); }
+  from { opacity: 0.4; transform: scale(0.85); }
   to { opacity: 1; transform: scale(1.2); }
 }
 
-.subagent-body {
-  color: var(--text-muted);
-  font-size: 0.76rem;
-  line-height: 1.4;
+/* Chat Thinking Bubble & Animated Dots */
+.chat-bubble.thinking {
+  background: rgba(30, 39, 58, 0.55);
+  border-left: 3px solid var(--accent-cyan);
+  padding: 12px 16px;
 }
 
-.subagent-body code {
-  font-family: 'JetBrains Mono', monospace;
-  background: rgba(0, 0, 0, 0.3);
-  padding: 1px 4px;
-  border-radius: 4px;
-  color: #c084fc;
+.thinking-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.typing-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.typing-dots span {
+  width: 6px;
+  height: 6px;
+  background: var(--accent-cyan);
+  border-radius: 50%;
+  display: inline-block;
+  animation: bounce-dots 1.4s infinite ease-in-out both;
+}
+
+.typing-dots span:nth-child(1) { animation-delay: -0.32s; }
+.typing-dots span:nth-child(2) { animation-delay: -0.16s; }
+.typing-dots span:nth-child(3) { animation-delay: 0s; }
+
+@keyframes bounce-dots {
+  0%, 80%, 100% { transform: scale(0.2); opacity: 0.2; }
+  40% { transform: scale(1); opacity: 1; box-shadow: 0 0 8px var(--accent-cyan); }
+}
+
+.thinking-text {
+  font-size: 0.78rem;
+  color: var(--accent-cyan);
+  opacity: 0.9;
+  letter-spacing: 0.01em;
 }
 
 </style>
@@ -710,10 +744,10 @@ body {
           <span class="ai-model-tag">AWS Bedrock Claude & Specialist Engine</span>
         </div>
 
-        <div class="prompt-chips">
+        <div class="prompt-chips" id="prompt-chips">
           <button class="chip" onclick="sendPrompt('What do I need to do right now? Which tutorial do I need?')">&#128196; What tutorial do I need?</button>
-          <button class="chip" onclick="sendPrompt('Show me the complete semester schedule for MS3013 from Lecture 1.')">&#128197; MS3013 Schedule</button>
-          <button class="chip" onclick="sendPrompt('Check all recent 26S1 announcements for deadlines or labs.')">&#128680; Urgent Deadlines</button>
+          <button class="chip" id="chip-course-schedule" onclick="sendPrompt('Show me the complete semester schedule and test dates for my modules.')">&#128197; Exam & Test Schedule</button>
+          <button class="chip" onclick="sendPrompt('Check all recent announcements for urgent deadlines or tests.')">&#128680; Urgent Deadlines</button>
           <button class="chip" onclick="sendPrompt('Create an optimized 3-hour study plan for tonight.')">&#9889; 3-Hour Plan</button>
         </div>
 
@@ -721,12 +755,12 @@ body {
           <div class="chat-bubble assistant">
             <div class="sender-tag">Lead Orchestrator</div>
             <p>Welcome to <strong>Agentic Workday OS v2</strong>! I have indexed your enrolled modules, announcements, and lecture slides.</p>
-            <p>Ask me <em>"What tutorial do I need?"</em> or <em>"What should I do right now?"</em> and I will analyze the timetable and pull out the exact PDF for you.</p>
+            <p>Ask me <em>"What is tested for MH2500?"</em>, <em>"What tutorial do I need?"</em>, or <em>"When is my next test?"</em> and I will analyze the timetable and pull out the exact PDF for you.</p>
           </div>
         </div>
 
         <form id="chat-form" class="chat-input-row" onsubmit="handleChatSubmit(event)">
-          <input type="text" id="chat-input" placeholder="Ask your Lead Agent (e.g. 'Which tutorial PDF do I need?', 'What is due for MS3013?')..." autocomplete="off" />
+          <input type="text" id="chat-input" placeholder="Ask your Lead Agent (e.g. 'What is tested for MH2500?', 'Which tutorial PDF do I need?')..." autocomplete="off" />
           <button type="submit" class="btn btn-primary" id="btn-send">Send</button>
         </form>
       </section>
@@ -1044,9 +1078,21 @@ async function fetchCourses() {
           <span style="font-family: 'JetBrains Mono', monospace; font-size: 0.76rem; font-weight: 700; color: var(--accent-cyan);">${escapeHtml(c.course_code)}</span>
           <span class="badge-version">${c.term || 'General'}</span>
         </div>
-        <div style="font-size: 0.82rem; font-weight: 600; margin-top: 2px;">${escapeHtml(c.title)}</div>
+        <div style="font-size: 0.82rem; font-weight: 600; margin-top: 2px;">${escapeHtml(c.title || c.course_code)}</div>
       </div>
     `).join("");
+
+    // Personalize the schedule quick chip with actual enrolled module
+    const technicalCourse = courses.map(c => {
+      const m = (c.course_code || '').match(/\b([A-Z]{2,4}\d{4}[A-Z]?)\b/);
+      return m ? m[1] : null;
+    }).find(code => code && !code.startsWith("CC00"));
+    const activeModule = technicalCourse || "Course";
+    const schedChip = document.getElementById("chip-course-schedule");
+    if (schedChip) {
+      schedChip.innerHTML = `&#128197; ${activeModule} Schedule`;
+      schedChip.setAttribute("onclick", `sendPrompt('Show me the complete semester schedule and test dates for ${activeModule}.')`);
+    }
   } catch (err) {
     console.error("Failed to fetch courses:", err);
   }
@@ -1211,19 +1257,37 @@ async function handleChatSubmit(e) {
 
   const sendBtn = document.getElementById("btn-send");
   sendBtn.disabled = true;
-  sendBtn.innerText = "...";
+  sendBtn.innerHTML = `Thinking...`;
+
+  // Show thinking animation bubble immediately
+  const container = document.getElementById("chat-messages");
+  const thinkingBubble = document.createElement("div");
+  thinkingBubble.id = "thinking-indicator";
+  thinkingBubble.className = "chat-bubble assistant thinking";
+  thinkingBubble.innerHTML = `
+    <div class="sender-tag">Lead Orchestrator</div>
+    <div class="thinking-row">
+      <div class="typing-dots"><span></span><span></span><span></span></div>
+      <span class="thinking-text">Lead Orchestrator is analyzing your question & dispatching specialist agents...</span>
+    </div>
+  `;
+  container.appendChild(thinkingBubble);
+  container.scrollTop = container.scrollHeight;
 
   try {
     const res = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message, term: currentTerm }),
+      body: JSON.stringify({ message, term: currentTerm, session_id: "default" }),
     });
     const data = await res.json();
+    document.getElementById("thinking-indicator")?.remove();
     appendChatMessage("assistant", data.reply, data.agent || "Lead Orchestrator");
   } catch (err) {
+    document.getElementById("thinking-indicator")?.remove();
     appendChatMessage("assistant", "Error reaching multi-agent backend: " + err, "System");
   } finally {
+    document.getElementById("thinking-indicator")?.remove();
     sendBtn.disabled = false;
     sendBtn.innerText = "Send";
   }
@@ -1245,15 +1309,21 @@ function appendChatMessage(role, content, senderName) {
     return `<br><a href="/api/materials/file/${docId}" target="_blank" class="doc-badge-link"><span style="font-size: 1.1rem;">&#128196;</span> Open Document: <strong>${docTitle}</strong> (PDF)</a><br>`;
   });
 
-  // Unescape subagent callout cards
-  renderedContent = renderedContent.replace(/&lt;div class=&quot;subagent-callout-card&quot;&gt;/g, '<div class="subagent-callout-card">');
-  renderedContent = renderedContent.replace(/&lt;div class=&quot;subagent-header&quot;&gt;/g, '<div class="subagent-header">');
+  // Unescape subagent compact badges & callout cards
+  renderedContent = renderedContent.replace(/&lt;div class=&quot;subagent-compact-badge&quot;&gt;/g, '<div class="subagent-compact-badge">');
   renderedContent = renderedContent.replace(/&lt;span class=&quot;subagent-pulse&quot;&gt;&lt;\/span&gt;/g, '<span class="subagent-pulse"></span>');
+  renderedContent = renderedContent.replace(/&lt;span class=&quot;subagent-badge-title&quot;&gt;/g, '<span class="subagent-badge-title">');
+  renderedContent = renderedContent.replace(/&lt;span class=&quot;subagent-badge-desc&quot;&gt;/g, '<span class="subagent-badge-desc">');
+  renderedContent = renderedContent.replace(/&lt;span class=&quot;subagent-label&quot;&gt;/g, '<span class="subagent-badge-title">');
+  renderedContent = renderedContent.replace(/&lt;span class=&quot;subagent-finding&quot;&gt;/g, '<span class="subagent-badge-desc">');
+  renderedContent = renderedContent.replace(/&lt;div class=&quot;subagent-callout-card&quot;&gt;/g, '<div class="subagent-compact-badge">');
+  renderedContent = renderedContent.replace(/&lt;div class=&quot;subagent-header&quot;&gt;/g, '<span class="subagent-badge-title">');
+  renderedContent = renderedContent.replace(/&lt;div class=&quot;subagent-body&quot;&gt;/g, '<span class="subagent-badge-desc">');
   renderedContent = renderedContent.replace(/&lt;strong&gt;/g, '<strong>').replace(/&lt;\/strong&gt;/g, '</strong>');
-  renderedContent = renderedContent.replace(/&lt;div class=&quot;subagent-body&quot;&gt;/g, '<div class="subagent-body">');
   renderedContent = renderedContent.replace(/&lt;em&gt;/g, '<em>').replace(/&lt;\/em&gt;/g, '</em>');
   renderedContent = renderedContent.replace(/&lt;code&gt;/g, '<code>').replace(/&lt;\/code&gt;/g, '</code>');
-  renderedContent = renderedContent.replace(/&lt;br&gt;/g, '<br>');
+  renderedContent = renderedContent.replace(/&lt;\/span&gt;/g, '</span>');
+  renderedContent = renderedContent.replace(/&lt;br&gt;/g, ' ');
   renderedContent = renderedContent.replace(/&lt;\/div&gt;/g, '</div>');
 
   // Basic markdown header/bold formatting
