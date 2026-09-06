@@ -80,6 +80,7 @@ class BedrockClient:
                 "arn": identity.get("Arn", "Unknown ARN"),
                 "account_id": identity.get("Account", "Unknown Account"),
                 "user_id": identity.get("UserId", "Unknown User"),
+                "region": region,
             }
         except Exception as e:
             err_str = str(e)
