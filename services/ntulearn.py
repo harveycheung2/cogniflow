@@ -118,7 +118,12 @@ class NTULearnService:
                 for ann in ann_data["results"]:
                     ann_id = ann.get("id", "")
                     ann_title = ann.get("title", "Course Announcement")
-                    ann_body = re.sub(r'<[^>]+>', '', ann.get("body", "")).strip()
+                    raw_body = ann.get("body", "")
+                    if isinstance(raw_body, dict):
+                        raw_body = raw_body.get("raw") or raw_body.get("text") or ""
+                    elif not isinstance(raw_body, str):
+                        raw_body = str(raw_body or "")
+                    ann_body = re.sub(r'<[^>]+>', '', raw_body).strip()
                     posted_at = ann.get("created", "")
                     db.upsert_announcement(ann_id, course_id, course_code, ann_title, ann_body, posted_at)
                     announcements_saved += 1

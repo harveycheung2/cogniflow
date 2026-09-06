@@ -4,27 +4,25 @@ from typing import List, Dict, Any
 import core.database as db
 
 def calculate_priority(due_date_str: str, estimated_mins: int = 60, is_graded: bool = True) -> float:
-    """Computes a 0.0 - 10.0 urgency score."""
     base_score = 5.0
     if not due_date_str:
         return base_score
 
     try:
-        # Simple date parsing
         due = datetime.fromisoformat(due_date_str.replace("Z", "+00:00"))
         now = datetime.now(due.tzinfo)
         diff_hours = (due - now).total_seconds() / 3600.0
 
         if diff_hours < 0:
-            return 10.0 # Overdue
+            return 10.0
         elif diff_hours < 24:
             urgency = 9.5
         elif diff_hours < 48:
             urgency = 8.5
-        elif diff_hours < 120: # 5 days
+        elif diff_hours < 120:
             urgency = 7.0
         else:
-            urgency = 4.0
+            urgency = 5.0
 
         if is_graded:
             urgency += 0.5
@@ -33,39 +31,55 @@ def calculate_priority(due_date_str: str, estimated_mins: int = 60, is_graded: b
         return base_score
 
 def extract_tasks_from_announcements():
-    """Parse NTULearn announcements for deadlines and action items."""
-    announcements = db.get_announcements(limit=30)
+    announcements = db.get_announcements(limit=50)
     deadline_patterns = [
-        r'(?:due|submit|deadline|submission)\s+(?:by|on|at)?\s*([A-Za-z0-9,:\s]{4,25})',
-        r'assignment\s*\d+',
-        r'quiz\s*\d+',
-        r'project\s+(?:milestone|report|proposal)',
+        (r'\b(?:homework|hw)\b', 8.5, 60),
+        (r'\b(?:ca1|ca2|continuous assessment)\b', 9.0, 90),
+        (r'\b(?:quiz|test|exam)\b', 9.2, 90),
+        (r'\b(?:lab|laboratory|grouping)\b', 7.5, 60),
+        (r'\b(?:tutorial|sheet)\b', 7.0, 45),
+        (r'\b(?:due|submit|deadline|submission)\b', 8.8, 60),
+        (r'\b(?:project|milestone|presentation)\b', 8.0, 120),
     ]
 
     for ann in announcements:
-        text = (ann.get("title", "") + " " + ann.get("body", "")).lower()
-        has_action = any(re.search(p, text) for p in deadline_patterns)
-        if has_action:
-            task_id = f"ann_{ann.get('id')}"
-            title = f"Review: {ann.get('title')}"
-            course_code = ann.get("course_code", "")
-            priority = 7.5 if "due" in text or "deadline" in text else 6.0
+        title = str(ann.get("title", ""))
+        body = str(ann.get("body", ""))
+        text = f"{title} {body}".lower()
 
-            # Default due date to 3 days from now if not explicitly parsed
-            due_date = (datetime.now() + timedelta(days=3)).strftime("%Y-%m-%d 23:59")
+        matched = False
+        priority = 6.0
+        est_mins = 60
+
+        for pattern, p_score, mins in deadline_patterns:
+            if re.search(pattern, text):
+                matched = True
+                priority = max(priority, p_score)
+                est_mins = mins
+
+        if matched:
+            task_id = f"ann_{ann.get('id')}"
+            clean_title = title.replace("IMP/", "").replace("IMP:", "").strip()
+            course_code = ann.get("course_code", "")
+            
+            date_match = re.search(r'([A-Za-z]+\s+\d{1,2}(?:,\s*\d{4})?)', text)
+            if date_match:
+                due_date = date_match.group(1)
+            else:
+                due_date = (datetime.now() + timedelta(days=3)).strftime("%Y-%m-%d")
+
             db.upsert_task(
                 task_id=task_id,
-                title=title,
+                title=f"Action: {clean_title[:80]}",
                 source="ntulearn",
                 course_code=course_code,
                 due_date=due_date,
-                estimated_minutes=45,
+                estimated_minutes=est_mins,
                 priority_score=priority,
-                notes=ann.get("body", "")[:200],
+                notes=body[:200],
             )
 
 def generate_day_schedule(available_hours: float = 6.0) -> List[Dict[str, Any]]:
-    """Generates an optimized, time-blocked schedule for the pending tasks."""
     pending = db.get_tasks(status="pending")
     if not pending:
         extract_tasks_from_announcements()
@@ -94,7 +108,7 @@ def generate_day_schedule(available_hours: float = 6.0) -> List[Dict[str, Any]]:
             "priority": task.get("priority_score", 5.0),
         })
 
-        current_time = end_time + timedelta(minutes=15) # 15 min buffer
+        current_time = end_time + timedelta(minutes=15)
         total_minutes_left -= (duration + 15)
 
     return schedule
