@@ -11,60 +11,56 @@ class BedrockClient:
         self._session = None
         self._client = None
         self._last_token = None
-        self._credentials_expired = False
         self.reload_client()
 
     def reload_client(self):
-        """Reload credentials from AWS SSO profile or .env in case user updated session token."""
+        """Reload credentials from AWS SSO profile (hackathon/hack2026) or .env."""
         if ENV_FILE.exists():
             load_dotenv(ENV_FILE, override=True)
 
-        profile = os.getenv("AWS_PROFILE", "hack2026").strip()
+        profile = os.getenv("AWS_PROFILE", "").strip()
         region = os.getenv("AWS_REGION", "us-east-1").strip() or "us-east-1"
         ak = os.getenv("AWS_ACCESS_KEY_ID", "").strip()
         sk = os.getenv("AWS_SECRET_ACCESS_KEY", "").strip()
         st = os.getenv("AWS_SESSION_TOKEN", "").strip()
 
-        # 1. Check AWS SSO Profile first (e.g. hack2026)
-        if profile and profile != "default":
+        # 1. Try SSO profiles (configured profile, hackathon, or hack2026)
+        profiles_to_try = [p for p in [profile, "hackathon", "hack2026", "default"] if p and p != "none"]
+        for prof in profiles_to_try:
             try:
-                sess = boto3.Session(profile_name=profile, region_name=region)
-                sts = sess.client("sts", region_name=region)
-                sts.get_caller_identity()
+                sess = boto3.Session(profile_name=prof, region_name=region)
+                client = sess.client("bedrock-runtime", region_name=region)
                 self._session = sess
-                self._client = self._session.client("bedrock-runtime", region_name=region)
-                self._credentials_expired = False
+                self._client = client
+                self._last_token = prof
                 return
             except Exception:
-                pass
+                continue
 
-        # 2. Fall back to static access keys from .env
-        if not ak or not sk:
-            self._client = None
-            return
+        # 2. Fall back to explicit access keys if provided
+        if ak and sk:
+            try:
+                self._session = boto3.Session(
+                    aws_access_key_id=ak,
+                    aws_secret_access_key=sk,
+                    aws_session_token=st or None,
+                    region_name=region,
+                )
+                self._client = self._session.client("bedrock-runtime", region_name=region)
+                self._last_token = st
+                return
+            except Exception:
+                self._client = None
+                return
 
-        try:
-            if os.environ.get("AWS_PROFILE") == "default":
-                os.environ.pop("AWS_PROFILE", None)
-
-            self._session = boto3.Session(
-                aws_access_key_id=ak,
-                aws_secret_access_key=sk,
-                aws_session_token=st or None,
-                region_name=region,
-            )
-            self._client = self._session.client("bedrock-runtime", region_name=region)
-            self._last_token = st
-            self._credentials_expired = False
-        except Exception:
-            self._client = None
+        self._client = None
 
     def is_ready(self) -> bool:
-        # Check if .env changed
         curr_st = os.getenv("AWS_SESSION_TOKEN", "").strip()
-        if curr_st != self._last_token:
+        curr_prof = os.getenv("AWS_PROFILE", "").strip()
+        if curr_st != self._last_token and curr_prof != self._last_token:
             self.reload_client()
-        return self._client is not None and not self._credentials_expired
+        return self._client is not None
 
     def get_account_identity(self) -> Dict[str, Any]:
         self.reload_client()
@@ -74,7 +70,6 @@ class BedrockClient:
             region = os.getenv("AWS_REGION", "us-east-1").strip() or "us-east-1"
             sts = self._session.client("sts", region_name=region)
             identity = sts.get_caller_identity()
-            self._credentials_expired = False
             return {
                 "ready": True,
                 "arn": identity.get("Arn", "Unknown ARN"),
@@ -83,52 +78,6 @@ class BedrockClient:
                 "region": region,
             }
         except Exception as e:
-            err_str = str(e)
-            if "ExpiredToken" in err_str:
-                self._credentials_expired = True
-            return {"ready": False, "error": f"STS Authentication failed: {err_str}"}
-
-    def converse(
-        self,
-        messages: List[Dict[str, Any]],
-        system_prompt: Optional[str] = None,
-        model_id: str = "anthropic.claude-3-5-sonnet-20240620-v1:0",
-        max_tokens: int = 1500,
-        temperature: float = 0.2
-    ) -> str:
-        if not self.is_ready():
-            raise RuntimeError("Bedrock Client not configured or token expired.")
-
-        system_config = [{"text": system_prompt}] if system_prompt else []
-        formatted_messages = []
-        for m in messages:
-            content = m.get("content", "")
-            if isinstance(content, str):
-                formatted_messages.append({
-                    "role": m.get("role", "user"),
-                    "content": [{"text": content}]
-                })
-            elif isinstance(content, list):
-                formatted_messages.append({
-                    "role": m.get("role", "user"),
-                    "content": content
-                })
-
-        try:
-            resp = self._client.converse(
-                modelId=model_id,
-                messages=formatted_messages,
-                system=system_config,
-                inferenceConfig={
-                    "maxTokens": max_tokens,
-                    "temperature": temperature
-                }
-            )
-            return resp["output"]["message"]["content"][0]["text"]
-        except Exception as e:
-            err_str = str(e)
-            if "ExpiredToken" in err_str:
-                self._credentials_expired = True
-            raise e
+            return {"ready": False, "error": f"STS Authentication failed: {e}"}
 
 bedrock_client = BedrockClient()

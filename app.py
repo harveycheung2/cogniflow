@@ -242,6 +242,13 @@ def toggle_task(task_id: str):
     db.set_task_status(task_id, new_status)
     return {"success": True, "new_status": new_status}
 
+
+@app.delete("/api/tasks/{task_id}")
+@app.post("/api/tasks/{task_id}/delete")
+def delete_task_endpoint(task_id: str):
+    db.delete_task(task_id)
+    return {"success": True, "deleted_id": task_id}
+
 @app.get("/api/schedule")
 def get_schedule(term: str = Query("26S1")):
     return generate_day_schedule(term=term, available_hours=6.0)

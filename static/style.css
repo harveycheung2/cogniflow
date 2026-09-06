@@ -761,3 +761,27 @@ body {
 .exam-na {
   color: var(--text-muted);
 }
+
+/* Task Delete Button */
+.task-delete-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  line-height: 1;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.7;
+}
+.task-delete-btn:hover {
+  color: var(--accent-red);
+  background: rgba(255, 107, 107, 0.15);
+  border-color: rgba(255, 107, 107, 0.3);
+  opacity: 1;
+  transform: scale(1.1);
+}

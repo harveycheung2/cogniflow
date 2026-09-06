@@ -169,6 +169,24 @@ async function fetchTasks() {
   }
 }
 
+async function deleteTask(taskId, event) {
+  if (event) event.stopPropagation();
+  if (!confirm("Are you sure you want to delete this task?")) return;
+
+  try {
+    const res = await fetch(`/api/tasks/${taskId}`, { method: "DELETE" });
+    if (!res.ok) {
+      showToast("❌ Failed to delete task.");
+      return;
+    }
+    showToast("🗑 Task deleted.");
+    fetchTasks();
+    fetchSchedule();
+  } catch (err) {
+    showToast("Error deleting task: " + err);
+  }
+}
+
 async function toggleTask(taskId) {
   try {
     await fetch(`/api/tasks/${taskId}/toggle`, { method: "POST" });
