@@ -14,33 +14,44 @@ class BedrockClient:
         self.reload_client()
 
     def reload_client(self):
-        """Reload credentials from .env in case user updated session token."""
+        """Reload credentials from AWS SSO profile or .env."""
         if ENV_FILE.exists():
             load_dotenv(ENV_FILE, override=True)
 
+        profile = os.getenv("AWS_PROFILE", "hackathon").strip()
+        region = os.getenv("AWS_REGION", "us-east-1").strip() or "us-east-1"
         ak = os.getenv("AWS_ACCESS_KEY_ID", "").strip()
         sk = os.getenv("AWS_SECRET_ACCESS_KEY", "").strip()
         st = os.getenv("AWS_SESSION_TOKEN", "").strip()
-        region = os.getenv("AWS_REGION", "us-east-1").strip() or "us-east-1"
 
-        if not ak or not sk:
-            self._client = None
-            return
+        # 1. First priority: AWS SSO Profile (hackathon or configured profile)
+        if profile:
+            try:
+                self._session = boto3.Session(profile_name=profile, region_name=region)
+                self._client = self._session.client("bedrock-runtime", region_name=region)
+                self._last_token = profile
+                return
+            except Exception as e:
+                # If profile fails, continue to fallback
+                pass
 
-        try:
-            if os.environ.get("AWS_PROFILE") == "default":
-                os.environ.pop("AWS_PROFILE", None)
+        # 2. Fallback to explicit access keys if provided
+        if ak and sk:
+            try:
+                self._session = boto3.Session(
+                    aws_access_key_id=ak,
+                    aws_secret_access_key=sk,
+                    aws_session_token=st or None,
+                    region_name=region,
+                )
+                self._client = self._session.client("bedrock-runtime", region_name=region)
+                self._last_token = st
+                return
+            except Exception:
+                self._client = None
+                return
 
-            self._session = boto3.Session(
-                aws_access_key_id=ak,
-                aws_secret_access_key=sk,
-                aws_session_token=st or None,
-                region_name=region,
-            )
-            self._client = self._session.client("bedrock-runtime", region_name=region)
-            self._last_token = st
-        except Exception:
-            self._client = None
+        self._client = None
 
     def is_ready(self) -> bool:
         # Check if .env changed
