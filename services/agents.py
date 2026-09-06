@@ -138,8 +138,8 @@ def execute_subagent_tool(name: str, args: Dict[str, Any], term: str = "26S1") -
             if not matching_mats:
                 matching_mats = all_mats
 
-        # Ensure key materials are analyzed if not yet analyzed
-        for m in matching_mats[:4]:
+        # Ensure key materials are analyzed if not yet analyzed (capped to 2 to conserve AWS tokens)
+        for m in matching_mats[:2]:
             if not db.get_parsed_documents(course_code=m.get("course_code")):
                 document_agent.analyze_document(m["id"])
 
@@ -264,7 +264,7 @@ Student Question: {user_query}"""
     if bedrock_client.is_ready():
         try:
             tool_config = {"tools": TOOL_DEFINITIONS}
-            max_turns = 4
+            max_turns = 3
             turn = 0
 
             while turn < max_turns:
@@ -274,7 +274,7 @@ Student Question: {user_query}"""
                     messages=messages,
                     system=[{"text": LEAD_SYSTEM_PROMPT}],
                     toolConfig=tool_config,
-                    inferenceConfig={"maxTokens": 1400, "temperature": 0.2}
+                    inferenceConfig={"maxTokens": 1000, "temperature": 0.2}
                 )
 
                 output_msg = resp.get("output", {}).get("message", {})

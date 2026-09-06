@@ -195,7 +195,7 @@ Return ONLY a JSON object:
                     messages=[{"role": "user", "content": prompt}],
                     system_prompt="You are an academic document specialist. Output strictly JSON.",
                     model_id=self.specialist_model,
-                    max_tokens=1500,
+                    max_tokens=700,
                     temperature=0.1
                 )
                 clean_json = re.sub(r'^```json\s*', '', ai_resp.strip())
