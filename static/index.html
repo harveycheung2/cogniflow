@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Agentic Workday OS v2 — AI Academic & Productivity Hub</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div class="app-container">
+    <!-- Top Header -->
+    <header class="navbar">
+      <div class="brand">
+        <div class="logo-icon">⚡</div>
+        <div>
+          <h1>Agentic Workday OS <span class="badge-version">v2.0</span></h1>
+          <p class="subtitle">Multi-Agent Academic & Schedule Orchestrator</p>
+        </div>
+      </div>
+
+      <div class="header-badges">
+        <div id="bedrock-badge" class="status-pill status-loading">
+          <span class="dot"></span> Bedrock: Checking...
+        </div>
+        <div id="ntulearn-badge" class="status-pill status-loading">
+          <span class="dot"></span> NTULearn: Checking...
+        </div>
+        <button id="btn-sync" class="btn btn-primary" onclick="triggerSync()">
+          <span class="btn-icon">🔄</span> Sync Blackboard
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Layout Grid -->
+    <main class="dashboard-grid">
+      
+      <!-- Left Column: Today's Priorities & Schedule -->
+      <section class="panel schedule-panel">
+        <div class="panel-header">
+          <h2>📅 Today's Time-Blocked Schedule</h2>
+          <span id="schedule-counter" class="count-tag">0 Tasks</span>
+        </div>
+        
+        <div id="schedule-timeline" class="schedule-timeline">
+          <div class="empty-state">Loading optimized schedule...</div>
+        </div>
+
+        <div class="panel-header section-break">
+          <h2>🎯 Prioritized Action Items</h2>
+          <button class="btn btn-sm btn-outline" onclick="openAddTaskModal()">+ Add Task</button>
+        </div>
+        <div id="tasks-list" class="tasks-list">
+          <div class="empty-state">No pending tasks. Click Sync to ingest announcements!</div>
+        </div>
+      </section>
+
+      <!-- Center Column: Multi-Agent AI Copilot -->
+      <section class="panel chat-panel">
+        <div class="panel-header">
+          <h2>🧠 Multi-Agent Lead Orchestrator</h2>
+          <span class="ai-model-tag">Claude 3.5/4.5 Sonnet & Haiku</span>
+        </div>
+
+        <div class="prompt-chips">
+          <button class="chip" onclick="sendPrompt('What are my highest priority tasks for today?')">🔥 Today's Priorities</button>
+          <button class="chip" onclick="sendPrompt('Check all recent NTULearn announcements for deadlines.')">📢 Deadlines & Quizzes</button>
+          <button class="chip" onclick="sendPrompt('Create an optimized 4-hour study plan for tonight.')">⏳ 4-Hour Study Plan</button>
+        </div>
+
+        <div id="chat-messages" class="chat-messages">
+          <div class="chat-bubble assistant">
+            <div class="sender-tag">Lead Orchestrator</div>
+            <p>Welcome to <strong>Agentic Workday OS v2</strong>! I am connected to Amazon Bedrock and can access your NTULearn courses, announcements, deadlines, and schedule.</p>
+            <p>How can I help orchestrate your day?</p>
+          </div>
+        </div>
+
+        <form id="chat-form" class="chat-input-row" onsubmit="handleChatSubmit(event)">
+          <input type="text" id="chat-input" placeholder="Ask your Lead Agent (e.g., 'Summarize urgent deadlines', 'Plan my afternoon')..." autocomplete="off" />
+          <button type="submit" class="btn btn-primary" id="btn-send">Send</button>
+        </form>
+      </section>
+
+      <!-- Right Column: Courses & Blackboard Feed -->
+      <section class="panel courses-panel">
+        <div class="panel-header">
+          <h2>📚 Enrolled Modules</h2>
+          <span id="courses-count" class="count-tag">0 Modules</span>
+        </div>
+
+        <div id="courses-list" class="courses-list">
+          <div class="empty-state">No courses loaded yet. Click <strong>Sync Blackboard</strong> above.</div>
+        </div>
+
+        <div class="panel-header section-break">
+          <h2>📢 Live NTULearn Feed</h2>
+        </div>
+        <div id="announcements-feed" class="announcements-feed">
+          <div class="empty-state">No announcements recorded.</div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Notification Banner -->
+  <div id="toast" class="toast"></div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
