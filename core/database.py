@@ -428,6 +428,12 @@ def set_task_status(task_id: str, new_status: str):
         conn.execute("UPDATE tasks SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (new_status, task_id))
         conn.commit()
 
+
+def delete_task(task_id: str):
+    with get_connection() as conn:
+        conn.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+        conn.commit()
+
 def get_all_courses(term: Optional[str] = None) -> List[Dict[str, Any]]:
     with get_connection() as conn:
         if term and term.upper() != "ALL":
