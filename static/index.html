@@ -1580,7 +1580,10 @@ async function fetchTimetableStatus() {
     if (data.has_timetable && data.timetable) {
       currentTimetableData = data.timetable;
       const parsed = data.timetable.parsed_data || {};
-      const sName = parsed.student_name || "Harvey Chin-Tao Cheung";
+      const rawName = (parsed.student_name || "").trim();
+      const hasRealName = rawName && !["not specified", "unknown", "student", "none", ""].includes(rawName.toLowerCase());
+      const sName = hasRealName ? rawName : "My Academic";
+      const displayTitle = hasRealName ? `${escapeHtml(sName)}'s Timetable` : `${escapeHtml(sName)} Timetable`;
       const totalCourses = parsed.total_courses || (parsed.courses ? parsed.courses.length : 0);
       const totalAus = parsed.total_aus || 0;
       const slotsCount = parsed.weekly_slots ? parsed.weekly_slots.length : 0;
@@ -1591,7 +1594,7 @@ async function fetchTimetableStatus() {
             <div class="timetable-saved-icon">📅</div>
             <div>
               <div class="timetable-saved-title">
-                <span>${escapeHtml(sName)}'s Timetable</span>
+                <span>${displayTitle}</span>
                 <span class="count-tag" style="font-size:0.68rem; padding:1px 6px;">${totalCourses} Modules</span>
               </div>
               <div class="timetable-saved-meta">
@@ -1670,7 +1673,10 @@ function openTimetableViewer() {
     const titleEl = document.getElementById("tt-modal-title");
     const subEl = document.getElementById("tt-modal-subtitle");
     if (titleEl) {
-      titleEl.innerHTML = `<span>📅</span> <span>${escapeHtml(p.student_name || 'Official')} Timetable</span>`;
+      const modalRawName = (p.student_name || "").trim();
+      const modalHasReal = modalRawName && !["not specified", "unknown", "student", "none", "", "official"].includes(modalRawName.toLowerCase());
+      const modalTitle = modalHasReal ? `${escapeHtml(modalRawName)}'s Timetable` : `My Academic Timetable`;
+      titleEl.innerHTML = `<span>📅</span> <span>${modalTitle}</span>`;
     }
     if (subEl) {
       subEl.innerText = `${p.academic_year || '2026'} ${p.semester || 'Semester 1'} • ${p.total_courses || 0} Modules • ${p.total_aus || 0} Total AUs`;
