@@ -4,7 +4,11 @@ from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 ENV_FILE = BASE_DIR / ".env"
-load_dotenv(ENV_FILE, override=True)
+PARENT_ENV = BASE_DIR.parent / "agentic_system" / ".env"
+if PARENT_ENV.exists():
+    load_dotenv(PARENT_ENV, override=False)
+if ENV_FILE.exists():
+    load_dotenv(ENV_FILE, override=True)
 
 # Clean up AWS_PROFILE to avoid botocore ProfileNotFound error if no local config exists
 if os.getenv("AWS_ACCESS_KEY_ID") and os.getenv("AWS_PROFILE") == "default":
@@ -21,8 +25,9 @@ DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = DATA_DIR / "workday_os.db"
 DOWNLOADS_DIR = BASE_DIR / "downloads"
-DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
 AUTH_FILE = BASE_DIR / "auth.json"
+if not AUTH_FILE.exists() and (BASE_DIR.parent / "agentic_system" / "ntulearn_session.json").exists():
+    AUTH_FILE = BASE_DIR.parent / "agentic_system" / "ntulearn_session.json"
 
 # AWS / Bedrock Config
 AWS_REGION = os.getenv("AWS_REGION", os.getenv("AWS_DEFAULT_REGION", "us-east-1"))
