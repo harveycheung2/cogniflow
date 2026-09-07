@@ -7,10 +7,10 @@ cd "$SCRIPT_DIR"
 if [ -f ".venv/bin/python" ]; then
     PYTHON=".venv/bin/python"
 else
-    echo "[Agentic OS v2] Creating virtual environment (.venv)..."
+    echo "[CogniFlow OS] Creating virtual environment (.venv)..."
     python3 -m venv .venv
     PYTHON=".venv/bin/python"
-    echo "[Agentic OS v2] Installing dependencies..."
+    echo "[CogniFlow OS] Installing dependencies..."
     $PYTHON -m pip install --upgrade pip
     $PYTHON -m pip install -r requirements.txt
     $PYTHON -m playwright install chromium
@@ -18,7 +18,7 @@ fi
 
 if [ ! -f ".env" ] && [ -f ".env.example" ]; then
     cp .env.example .env
-    echo "[Agentic OS v2] Created .env from .env.example"
+    echo "[CogniFlow OS] Created .env from .env.example"
 fi
 
 echo "Starting CogniFlow OS on http://127.0.0.1:8765"
