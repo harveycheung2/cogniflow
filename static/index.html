@@ -454,9 +454,72 @@ body {
   line-height: 1.5;
 }
 .chat-bubble.assistant {
+  position: relative;
   background: rgba(30, 39, 58, 0.85);
   border: 1px solid var(--border-color);
   align-self: flex-start;
+  padding-right: 75px;
+}
+
+.btn-read-bubble {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: var(--text-muted);
+  border-radius: 6px;
+  font-size: 0.68rem;
+  padding: 3px 8px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.2s ease;
+}
+.btn-read-bubble:hover {
+  background: rgba(0, 242, 254, 0.2);
+  border-color: var(--accent-cyan);
+  color: #fff;
+}
+.btn-read-bubble.speaking {
+  background: rgba(16, 185, 129, 0.25);
+  border-color: #10b981;
+  color: #10b981;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.35);
+}
+
+.btn-mic {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 38px;
+  padding: 0;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 1.15rem;
+  flex-shrink: 0;
+}
+.btn-mic:hover {
+  background: rgba(0, 242, 254, 0.15);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+.btn-mic.listening {
+  background: rgba(239, 68, 68, 0.25) !important;
+  border-color: #ef4444 !important;
+  color: #ef4444 !important;
+  animation: mic-pulse 1.2s infinite;
+}
+@keyframes mic-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6); }
+  70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
 }
 .chat-bubble.user {
   background: linear-gradient(135deg, rgba(79, 172, 254, 0.3), rgba(142, 45, 226, 0.3));
@@ -1256,7 +1319,12 @@ body {
       <section class="panel chat-panel">
         <div class="panel-header">
           <h2>&#129302; Multi-Agent Lead Orchestrator</h2>
-          <span class="ai-model-tag" id="ai-model-tag-header" onclick="openTokenModal()" style="cursor: pointer;" title="Click to view AI Token & Quota Monitor">&#9889; AI Cascade (Click to inspect tokens)</span>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <button type="button" id="btn-voice-toggle" class="btn btn-secondary" onclick="toggleAutoReadAloud()" title="Toggle automatic speech read-out for replies" style="padding: 4px 10px; font-size: 0.74rem; border-radius: 6px; display: inline-flex; align-items: center; gap: 5px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); cursor: pointer;">
+              <span id="voice-toggle-icon">&#128263;</span> <span id="voice-toggle-text">Read Aloud: OFF</span>
+            </button>
+            <span class="ai-model-tag" id="ai-model-tag-header" onclick="openTokenModal()" style="cursor: pointer;" title="Click to view AI Token & Quota Monitor">&#9889; AI Cascade</span>
+          </div>
         </div>
 
         <div class="prompt-chips" id="prompt-chips">
@@ -1269,13 +1337,19 @@ body {
         <div id="chat-messages" class="chat-messages">
           <div class="chat-bubble assistant">
             <div class="sender-tag">Lead Orchestrator</div>
-            <p>Welcome to <strong>CogniFlow OS</strong>! I have indexed your enrolled modules, announcements, and lecture slides.</p>
-            <p>Ask me <em>"What is tested for MH2500?"</em>, <em>"What tutorial do I need?"</em>, or <em>"When is my next test?"</em> and I will analyze the timetable and pull out the exact PDF for you.</p>
+            <button type="button" class="btn-read-bubble" onclick="readBubbleText(this)" title="Read aloud">&#128266; Listen</button>
+            <div class="bubble-text-content">
+              <p>Welcome to <strong>CogniFlow OS</strong>! I have indexed your enrolled modules, announcements, and lecture slides.</p>
+              <p>Ask me <em>"What is tested for MH2500?"</em>, <em>"What tutorial do I need?"</em>, or <em>"When is my next test?"</em> and I will analyze the timetable and pull out the exact PDF for you.</p>
+            </div>
           </div>
         </div>
 
         <form id="chat-form" class="chat-input-row" onsubmit="handleChatSubmit(event)">
-          <input type="text" id="chat-input" placeholder="Ask your Lead Agent (e.g. 'What is tested for MH2500?', 'Which tutorial PDF do I need?')..." autocomplete="off" />
+          <button type="button" id="btn-mic" class="btn-mic" onclick="toggleSpeechRecognition()" title="Voice input: Click to speak (Chrome / Edge / Safari)">
+            <span id="mic-icon">&#127908;</span>
+          </button>
+          <input type="text" id="chat-input" placeholder="Ask your Lead Agent (or click 🎙️ mic to speak)..." autocomplete="off" />
           <button type="submit" class="btn btn-primary" id="btn-send">Send</button>
         </form>
       </section>
@@ -1873,12 +1947,217 @@ function appendChatMessage(role, content, senderName) {
   renderedContent = renderedContent.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
   renderedContent = renderedContent.replace(/`([^`]+)`/g, '<code style="font-family: monospace; background: rgba(255,255,255,0.08); padding: 1px 5px; border-radius: 4px;">$1</code>');
 
+  const listenBtnHtml = role === "assistant" 
+    ? `<button type="button" class="btn-read-bubble" onclick="readBubbleText(this)" title="Read aloud">&#128266; Listen</button>` 
+    : '';
+
   bubble.innerHTML = `
     <div class="sender-tag">${escapeHtml(senderName)}</div>
-    <div style="white-space: pre-wrap; line-height: 1.6;">${renderedContent}</div>
+    ${listenBtnHtml}
+    <div class="bubble-text-content" style="white-space: pre-wrap; line-height: 1.6;">${renderedContent}</div>
   `;
   container.appendChild(bubble);
   container.scrollTop = container.scrollHeight;
+
+  if (role === "assistant" && autoReadAloud) {
+    speakText(content);
+  }
+}
+
+
+/* ============================================================
+   VOICE INTEGRATION (Web Speech API - Native STT & TTS)
+   Zero external cost, ultra-low latency speech recognition & read-aloud
+   ============================================================ */
+let recognition = null;
+let isRecognizing = false;
+let autoReadAloud = false;
+let currentUtterance = null;
+
+function initSpeechRecognition() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    console.warn("SpeechRecognition is not supported in this browser.");
+    return null;
+  }
+  const recog = new SpeechRecognition();
+  recog.continuous = false;
+  recog.interimResults = true;
+  recog.lang = "en-US";
+
+  recog.onstart = () => {
+    isRecognizing = true;
+    const micBtn = document.getElementById("btn-mic");
+    if (micBtn) micBtn.classList.add("listening");
+    const input = document.getElementById("chat-input");
+    if (input) input.placeholder = "Listening... Speak into your microphone";
+  };
+
+  recog.onresult = (event) => {
+    let transcript = "";
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      transcript += event.results[i][0].transcript;
+    }
+    const input = document.getElementById("chat-input");
+    if (input) {
+      input.value = transcript;
+    }
+  };
+
+  recog.onerror = (event) => {
+    console.warn("Speech recognition error:", event.error);
+    stopSpeechRecognition();
+    if (event.error === "not-allowed") {
+      alert("Microphone access was denied. Please allow microphone permissions in your browser address bar.");
+    }
+  };
+
+  recog.onend = () => {
+    stopSpeechRecognition();
+  };
+
+  return recog;
+}
+
+function toggleSpeechRecognition() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    alert("Voice recognition is not supported in this browser. For voice input, please use Google Chrome, Microsoft Edge, or Apple Safari.");
+    return;
+  }
+
+  if (isRecognizing) {
+    if (recognition) recognition.stop();
+    stopSpeechRecognition();
+  } else {
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+    if (!recognition) {
+      recognition = initSpeechRecognition();
+    }
+    try {
+      recognition.start();
+    } catch (e) {
+      console.warn("Recognition start retry:", e);
+      recognition = initSpeechRecognition();
+      if (recognition) recognition.start();
+    }
+  }
+}
+
+function stopSpeechRecognition() {
+  isRecognizing = false;
+  const micBtn = document.getElementById("btn-mic");
+  if (micBtn) micBtn.classList.remove("listening");
+  const input = document.getElementById("chat-input");
+  if (input && input.placeholder.startsWith("Listening")) {
+    input.placeholder = "Ask your Lead Agent (or click 🎙️ mic to speak)...";
+  }
+}
+
+function toggleAutoReadAloud() {
+  autoReadAloud = !autoReadAloud;
+  const icon = document.getElementById("voice-toggle-icon");
+  const text = document.getElementById("voice-toggle-text");
+  const btn = document.getElementById("btn-voice-toggle");
+  if (autoReadAloud) {
+    if (icon) icon.innerHTML = "&#128266;";
+    if (text) text.innerText = "Read Aloud: ON";
+    if (btn) {
+      btn.style.borderColor = "var(--accent-cyan)";
+      btn.style.background = "rgba(0, 242, 254, 0.15)";
+      btn.style.color = "var(--accent-cyan)";
+    }
+  } else {
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+    if (icon) icon.innerHTML = "&#128263;";
+    if (text) text.innerText = "Read Aloud: OFF";
+    if (btn) {
+      btn.style.borderColor = "var(--border-color)";
+      btn.style.background = "rgba(255, 255, 255, 0.05)";
+      btn.style.color = "var(--text-main)";
+    }
+  }
+}
+
+function cleanTextForSpeech(raw) {
+  if (!raw) return "";
+  let clean = raw.replace(/\[OPEN_DOC:[^\]]+\]/g, "");
+  clean = clean.replace(/<[^>]*>/g, ""); // strip HTML tags
+  clean = clean.replace(/[*_#`~|]/g, ""); // strip markdown formatting
+  clean = clean.replace(/https?:\/\/\S+/g, ""); // strip URLs
+  clean = clean.replace(/&[a-z]+;/g, " "); // strip entities
+  return clean.trim();
+}
+
+function speakText(text, onEndCallback) {
+  if (!window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+
+  const clean = cleanTextForSpeech(text);
+  if (!clean) return;
+
+  const utterance = new SpeechSynthesisUtterance(clean);
+  utterance.rate = 1.05;
+  utterance.pitch = 1.0;
+
+  const voices = window.speechSynthesis.getVoices();
+  const naturalVoice = voices.find(v => (v.name.includes("Natural") || v.name.includes("Neural") || v.name.includes("Google") || v.name.includes("Samantha")) && v.lang.startsWith("en")) ||
+                       voices.find(v => v.lang.startsWith("en"));
+  if (naturalVoice) {
+    utterance.voice = naturalVoice;
+  }
+
+  utterance.onend = () => {
+    currentUtterance = null;
+    if (onEndCallback) onEndCallback();
+  };
+  utterance.onerror = () => {
+    currentUtterance = null;
+    if (onEndCallback) onEndCallback();
+  };
+
+  currentUtterance = utterance;
+  window.speechSynthesis.speak(utterance);
+}
+
+function readBubbleText(btnElement) {
+  if (!window.speechSynthesis) {
+    alert("Text-to-speech is not supported in this browser.");
+    return;
+  }
+
+  if (btnElement.classList.contains("speaking")) {
+    window.speechSynthesis.cancel();
+    btnElement.classList.remove("speaking");
+    btnElement.innerHTML = "&#128266; Listen";
+    return;
+  }
+
+  document.querySelectorAll(".btn-read-bubble").forEach(b => {
+    b.classList.remove("speaking");
+    b.innerHTML = "&#128266; Listen";
+  });
+
+  const bubble = btnElement.closest(".chat-bubble");
+  if (!bubble) return;
+
+  const contentEl = bubble.querySelector(".bubble-text-content") || bubble;
+  const textToRead = contentEl.innerText || contentEl.textContent;
+
+  btnElement.classList.add("speaking");
+  btnElement.innerHTML = "&#9209; Stop";
+
+  speakText(textToRead, () => {
+    btnElement.classList.remove("speaking");
+    btnElement.innerHTML = "&#128266; Listen";
+  });
+}
+
+// Pre-load available system voices
+if (typeof window !== "undefined" && window.speechSynthesis) {
+  window.speechSynthesis.onvoiceschanged = () => {
+    window.speechSynthesis.getVoices();
+  };
 }
 
 function openAddTaskModal() {
