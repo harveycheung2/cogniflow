@@ -489,23 +489,49 @@ body {
   box-shadow: 0 0 10px rgba(16, 185, 129, 0.35);
 }
 
-.voice-countdown-badge {
-  display: none;
+.chat-input-wrapper {
+  position: relative;
+  flex: 1;
+  display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: 6px;
-  background: rgba(0, 242, 254, 0.15);
-  border: 1px solid var(--accent-cyan);
-  color: var(--accent-cyan);
-  font-size: 0.74rem;
-  font-weight: 600;
-  white-space: nowrap;
-  animation: pulse-countdown 1s infinite alternate;
 }
-@keyframes pulse-countdown {
-  0% { opacity: 0.8; transform: scale(0.99); }
-  100% { opacity: 1; transform: scale(1.02); }
+.chat-input-wrapper input {
+  width: 100%;
+  padding-right: 70px;
+}
+.chat-input-timer {
+  display: none;
+  position: absolute;
+  right: 10px;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 12px;
+  background: rgba(0, 242, 254, 0.16);
+  border: 1px solid rgba(0, 242, 254, 0.45);
+  color: var(--accent-cyan);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+  user-select: none;
+  animation: timer-glow 1s infinite alternate;
+}
+.chat-input-timer .timer-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-cyan);
+  box-shadow: 0 0 6px var(--accent-cyan);
+  animation: timer-pulse 0.8s infinite alternate;
+}
+@keyframes timer-glow {
+  0% { box-shadow: 0 0 0 0 rgba(0, 242, 254, 0.2); }
+  100% { box-shadow: 0 0 8px rgba(0, 242, 254, 0.4); }
+}
+@keyframes timer-pulse {
+  0% { transform: scale(0.85); opacity: 0.6; }
+  100% { transform: scale(1.15); opacity: 1; }
 }
 
 .btn-mic {
@@ -1368,8 +1394,13 @@ body {
           <button type="button" id="btn-mic" class="btn-mic" onclick="toggleSpeechRecognition()" title="Voice input: Click to speak (Chrome / Edge / Safari)">
             <span id="mic-icon">&#127908;</span>
           </button>
-          <input type="text" id="chat-input" placeholder="Ask your Lead Agent (or click 🎙️ mic to speak)..." autocomplete="off" oninput="handleChatInputChange()" onkeydown="handleChatInputKeydown(event)" />
-          <span id="voice-countdown-badge" class="voice-countdown-badge">&#9203; Sending in <span id="countdown-num">3</span>s... <a href="javascript:void(0)" onclick="cancelVoiceCountdown()" style="color: var(--text-main); text-decoration: underline; margin-left: 4px;">Edit</a></span>
+          <div class="chat-input-wrapper">
+            <input type="text" id="chat-input" placeholder="Ask your Lead Agent (or click 🎙️ mic to speak)..." autocomplete="off" oninput="handleChatInputChange()" onkeydown="handleChatInputKeydown(event)" />
+            <div id="chat-input-timer" class="chat-input-timer" title="Auto-sending in 3s... (Type in box to edit)">
+              <span class="timer-dot"></span>
+              <span id="chat-timer-text">3s</span>
+            </div>
+          </div>
           <button type="submit" class="btn btn-primary" id="btn-send">Send</button>
         </form>
       </section>
@@ -2107,18 +2138,18 @@ function startVoiceCountdown() {
   wasVoiceInput = true;
   voiceCountdownSeconds = 3;
 
-  const badge = document.getElementById("voice-countdown-badge");
-  const numSpan = document.getElementById("countdown-num");
+  const timerEl = document.getElementById("chat-input-timer");
+  const timerText = document.getElementById("chat-timer-text");
   const sendBtn = document.getElementById("btn-send");
 
-  if (badge) badge.style.display = "inline-flex";
-  if (numSpan) numSpan.innerText = voiceCountdownSeconds;
+  if (timerEl) timerEl.style.display = "inline-flex";
+  if (timerText) timerText.innerText = `${voiceCountdownSeconds}s`;
   if (sendBtn) sendBtn.innerText = `Send (${voiceCountdownSeconds}s)`;
 
   voiceCountdownTimer = setInterval(() => {
     voiceCountdownSeconds--;
     if (voiceCountdownSeconds > 0) {
-      if (numSpan) numSpan.innerText = voiceCountdownSeconds;
+      if (timerText) timerText.innerText = `${voiceCountdownSeconds}s`;
       if (sendBtn) sendBtn.innerText = `Send (${voiceCountdownSeconds}s)`;
     } else {
       clearVoiceCountdown();
@@ -2134,9 +2165,9 @@ function clearVoiceCountdown() {
     clearInterval(voiceCountdownTimer);
     voiceCountdownTimer = null;
   }
-  const badge = document.getElementById("voice-countdown-badge");
+  const timerEl = document.getElementById("chat-input-timer");
   const sendBtn = document.getElementById("btn-send");
-  if (badge) badge.style.display = "none";
+  if (timerEl) timerEl.style.display = "none";
   if (sendBtn && !sendBtn.disabled) sendBtn.innerText = "Send";
 }
 
@@ -2145,12 +2176,14 @@ function cancelVoiceCountdown() {
 }
 
 function handleChatInputChange() {
+  // Editing or changing text inside the input cancels the countdown timer immediately
   if (voiceCountdownTimer) {
     cancelVoiceCountdown();
   }
 }
 
 function handleChatInputKeydown(e) {
+  // Typing keystrokes in the box cancels the timer
   if (voiceCountdownTimer) {
     cancelVoiceCountdown();
   }
