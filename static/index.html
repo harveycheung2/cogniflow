@@ -2206,14 +2206,24 @@ function cleanTextForSpeech(raw) {
   clean = clean.replace(/&[a-z]+;/g, " ");
   clean = clean.replace(/\s+/g, " ").trim();
 
-  // Extract short summary (first 1-2 clean sentences, max 180 chars)
+  // Allow complete sentences (1-2 full sentences, up to ~50-60 words) without abrupt cutoffs
   const sentences = clean.split(/(?<=[.!?])\s+/);
-  const shortSentences = sentences.filter(s => s.length > 5);
-  let summary = shortSentences.slice(0, 2).join(" ");
-  if (summary.length > 180) {
-    summary = summary.substring(0, 177).replace(/\s+\S*$/, "") + "...";
+  const validSentences = sentences.filter(s => s.trim().length > 3);
+
+  if (validSentences.length > 0) {
+    // Keep up to 2 complete sentences so the voice synthesizer finishes naturally
+    let summary = validSentences.slice(0, 2).join(" ").trim();
+    // If the first two sentences are very short (under 18 words), include the third sentence if available
+    if (validSentences.length >= 3 && summary.split(/\s+/).length < 18) {
+      summary = validSentences.slice(0, 3).join(" ").trim();
+    }
+    // Ensure clean sentence-ending punctuation so TTS voice cadence ends naturally
+    if (summary && !/[.!?]$/.test(summary)) {
+      summary += ".";
+    }
+    return summary;
   }
-  return summary || clean.substring(0, 160);
+  return clean;
 }
 
 function speakText(text, onEndCallback) {

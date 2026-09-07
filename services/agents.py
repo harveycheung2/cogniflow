@@ -34,7 +34,7 @@ Guidelines:
   Today is strictly **Monday, 07 September 2026** (e.g. 7 September 2026 is **Monday**, NOT Saturday). Never assume or state an incorrect day of the week. Calculate all deadlines, tutorial dates, and class schedules relative to today being Monday.
 - **Dedicated Spoken Voice Summary (MANDATORY)**:
   At the very end of your final response, append a dedicated voice summary block formatted EXACTLY as:
-  `[VOICE_SUMMARY: 1-2 concise, conversational spoken sentences answering the question directly. Strictly ZERO emojis, ZERO markdown, ZERO bullet points, ZERO document tokens. Written in plain spoken English for text-to-speech.]`
+  `[VOICE_SUMMARY: 1-2 complete, conversational spoken sentences (roughly 25-45 words). Never cut off abruptly; always finish your complete sentence with closing punctuation. Zero emojis, zero markdown, zero bullet points.]`
   Example:
   [VOICE_SUMMARY: You have an MH2500 lecture at 9:30 AM and an SC2001 tutorial at 2:30 PM today.]
 - Professional, encouraging, and clear executive tone.
@@ -558,11 +558,11 @@ def extract_and_strip_voice_summary(reply_text: str) -> Tuple[str, str]:
         clean = clean_voice_summary_text(base)
         sentences = re.split(r'(?<=[.!?])\s+', clean)
         valid = [s.strip() for s in sentences if len(s.strip()) > 6 and not s.strip().startswith('---')]
-        voice_summary = ' '.join(valid[:2])
-        if len(voice_summary) > 200:
-            voice_summary = voice_summary[:197].rsplit(' ', 1)[0] + '...'
+        voice_summary = ' '.join(valid[:2]).strip()
+        if voice_summary and voice_summary[-1] not in '.!?':
+            voice_summary += '.'
         if not voice_summary:
-            voice_summary = clean[:180]
+            voice_summary = clean.strip()
             
     return cleaned_reply, voice_summary
 
