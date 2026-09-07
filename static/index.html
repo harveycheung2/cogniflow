@@ -1957,6 +1957,10 @@ async function handleChatSubmit(e) {
     const data = await res.json();
     document.getElementById("thinking-indicator")?.remove();
     appendChatMessage("assistant", data.reply, data.agent || "Lead Orchestrator", data.speech_summary);
+
+    // Refresh tasks and schedule immediately so any new tasks appear in the left panel
+    fetchTasks();
+    fetchSchedule();
   } catch (err) {
     document.getElementById("thinking-indicator")?.remove();
     appendChatMessage("assistant", "Error reaching multi-agent backend: " + err, "System");

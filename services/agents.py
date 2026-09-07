@@ -17,6 +17,7 @@ Available Sub-Agents to Delegate to:
 1. `task_document_specialist`: Inspects course slides, searches tutorial documents, extracts semester schedules, and retrieves specific PDF materials or test/exam information. Pass both `course_code` (e.g. 'MH2500', 'SC2001', 'SC2207', 'MH2802', 'CC0006') and `detail` (e.g. 'schedule', 'test', 'mock', 'Tutorial 1', 'syllabus') so it can deeply search document contents, questions, solutions, and milestones.
 2. `task_planner_agent`: Generates optimized time-blocked study schedules and calculates urgency priority scores.
 3. `task_ntulearn_specialist`: Checks and reads the full text bodies of announcements, deadlines, test venues, and course notices.
+4. `create_action_task`: Creates and logs a new actionable task, reminder, interview, deadline, or study commitment into the student's Prioritized Action Items list and SQLite database. Whenever the student asks to add a task, schedule an interview, or set an action item, you MUST execute this tool with a descriptive title, due date/time, and priority score so it actually gets saved.
 
 Guidelines:
 - **Conversation Context Preservation & Course Accuracy**: Always remember context across conversation turns. Ensure tool calls always use the specific course code (e.g., MH2500) asked about in the prompt. Never substitute with an unrelated course (like CC0006) when the student asked about a different module.
@@ -106,6 +107,44 @@ TOOL_DEFINITIONS = [
                             "description": "Search topic e.g. 'quiz', 'test', 'venue', 'exam', 'slot', 'schedule'"
                         }
                     }
+                }
+            }
+        }
+    },
+    {
+        "toolSpec": {
+            "name": "create_action_task",
+            "description": "Create and log a new actionable task, reminder, interview, deadline, or study commitment into the student's Prioritized Action Items list and SQLite database.",
+            "inputSchema": {
+                "json": {
+                    "type": "object",
+                    "properties": {
+                        "title": {
+                            "type": "string",
+                            "description": "Clear title of the task (e.g. 'Interview (4:00 PM)', 'Review BS1016 Lecture 3')"
+                        },
+                        "course_code": {
+                            "type": "string",
+                            "description": "Course code or 'General' for personal/extracurricular events"
+                        },
+                        "due_date": {
+                            "type": "string",
+                            "description": "Due date/time (e.g. '2026-09-07 16:00' or 'Today 4:00 PM')"
+                        },
+                        "estimated_minutes": {
+                            "type": "integer",
+                            "description": "Estimated duration in minutes (e.g. 60)"
+                        },
+                        "priority_score": {
+                            "type": "number",
+                            "description": "Priority score between 1.0 and 10.0 (e.g. 9.5 for urgent commitments/interviews)"
+                        },
+                        "notes": {
+                            "type": "string",
+                            "description": "Optional notes or details"
+                        }
+                    },
+                    "required": ["title"]
                 }
             }
         }
@@ -303,6 +342,39 @@ def execute_subagent_tool(name: str, args: Dict[str, Any], term: str = "26S1") -
             "scheduled_blocks": schedule[:6],
             "pending_tasks_count": len(tasks),
             "top_tasks": [t["title"] for t in tasks[:5]]
+        }
+
+    elif name == "create_action_task":
+        import time
+        title = args.get("title", "").strip()
+        course_code = args.get("course_code") or "General"
+        due_date = args.get("due_date") or ""
+        est_min = int(args.get("estimated_minutes") or 60)
+        priority = float(args.get("priority_score") or 9.0)
+        notes = args.get("notes") or ""
+
+        task_id = f"task_{int(time.time())}"
+        db.upsert_task(
+            task_id=task_id,
+            title=title,
+            source="assistant",
+            course_code=course_code,
+            due_date=due_date,
+            estimated_minutes=est_min,
+            priority_score=priority,
+            notes=notes,
+            term=term,
+        )
+        summary_text = f"Logged '{title}' (due: {due_date or 'today'}) with Priority {priority}."
+        return {
+            "subagent": "Task Engine",
+            "status": "success",
+            "task_id": task_id,
+            "title": title,
+            "due_date": due_date,
+            "priority_score": priority,
+            "finding": summary_text,
+            "result_summary": summary_text
         }
 
     elif name == "task_ntulearn_specialist":
@@ -796,6 +868,54 @@ CRITICAL INSTRUCTION: Today is {day_name}, {date_str} (07 September 2026 is stri
     # Build visible compact Sub-Agent Delegation badges
     delegation_callout = ""
     if delegation_steps:
+        sub_badges = []
+        for s in delegation_steps:
+            agent_title = s.get("agent", "Specialist Agent")
+            summary = s.get("result_summary", "")
+            if len(summary) > 130:
+                summary = summary[:127] + "..."
+            sub_badges.append(
+                f'<div class="subagent-compact-badge">'
+                f'<span class="subagent-pulse"></span>'
+                f'<span class="subagent-badge-title">⚡ {agent_title}:</span> '
+                f'<span class="subagent-badge-desc">{summary}</span>'
+                f'</div>'
+            )
+        delegation_callout = "".join(sub_badges) + "\n\n"
+
+    # Failsafe check: if user asked to add a task/interview but tool wasn't triggered
+    task_added_by_tool = any(s.get("agent") in ["create_action_task", "Task Engine"] for s in delegation_steps)
+    if not task_added_by_tool and re.search(r'\b(add|create|schedule|log|set|have)\s+(a\s+)?(task|interview|reminder|meeting|appointment)\b|\binterview\b', user_query, re.IGNORECASE):
+        import time
+        if "interview" in user_query.lower():
+            t_match = re.search(r'(\d{1,2}(?::\d{2})?\s*(?:am|pm)?|\d{4}\s*hrs?)', user_query, re.IGNORECASE)
+            time_str = f" ({t_match.group(1).upper()})" if t_match else ""
+            fallback_title = f"Interview{time_str}"
+        else:
+            m_title = re.search(r'\b(?:task\s+for|task\s+that|task\s+to|task:?)\s+([^\.,;\n\?]+)', user_query, re.IGNORECASE)
+            fallback_title = m_title.group(1).strip().capitalize() if m_title else "Scheduled Action Item"
+            if len(fallback_title) > 50:
+                fallback_title = fallback_title[:47] + "..."
+
+        due_str = f"{datetime.now().strftime('%Y-%m-%d')} 16:00" if ("4:00" in user_query or "4pm" in user_query.lower() or "4 pm" in user_query.lower()) else f"{datetime.now().strftime('%Y-%m-%d')}"
+        
+        task_id = f"task_{int(time.time())}"
+        db.upsert_task(
+            task_id=task_id,
+            title=fallback_title,
+            source="assistant",
+            course_code="General",
+            due_date=due_str,
+            estimated_minutes=60,
+            priority_score=9.5,
+            notes="Logged via Lead Orchestrator",
+            term=term,
+        )
+        delegation_steps.append({
+            "agent": "Task Engine",
+            "result_summary": f"Logged '{fallback_title}' into Prioritized Action Items."
+        })
+        # Rebuild delegation badges
         sub_badges = []
         for s in delegation_steps:
             agent_title = s.get("agent", "Specialist Agent")
