@@ -504,6 +504,32 @@ def build_course_dossier_hub(courses: List[Dict[str, Any]], target_course: Optio
 '''
 
 
+def extract_speech_summary(text: str, max_sentences: int = 2) -> str:
+    """Extract a short, punchy 1-2 sentence spoken summary stripped of all emojis and markdown."""
+    if not text:
+        return ""
+    clean = re.sub(r'<[^>]+>', ' ', text)
+    clean = re.sub(r'\[OPEN_DOC:[^\]]+\]', ' ', clean)
+    clean = re.sub(r'#+\s*', '', clean)
+    clean = re.sub(r'[*_`~|]', '', clean)
+    emoji_pattern = re.compile(
+        r'[\U0001F1E0-\U0001F1FF\U0001F300-\U0001F5FF\U0001F600-\U0001F64F\U0001F680-\U0001F6FF'
+        r'\U0001F700-\U0001F77F\U0001F780-\U0001F7FF\U0001F800-\U0001F8FF\U0001F900-\U0001F9FF'
+        r'\U0001FA00-\U0001FA6F\U0001FA70-\U0001FAFF\u2600-\u26FF\u2700-\u27BF]+',
+        flags=re.UNICODE
+    )
+    clean = emoji_pattern.sub('', clean)
+    clean = re.sub(r'&#\d+;', '', clean)
+    clean = re.sub(r'&[a-z]+;', '', clean)
+    clean = re.sub(r'\s+', ' ', clean).strip()
+    sentences = re.split(r'(?<=[.!?])\s+', clean)
+    selected = [s.strip() for s in sentences if s.strip() and len(s.strip()) > 3]
+    summary = ' '.join(selected[:max_sentences])
+    if len(summary) > 200:
+        summary = summary[:197].rsplit(' ', 1)[0] + '...'
+    return summary or clean[:180]
+
+
 def execute_chat_query(user_query: str, term: str = "26S1", session_id: str = "default") -> Dict[str, Any]:
     courses = db.get_all_courses(term=term)
     courses_str = ", ".join([f"{c['course_code']} ({c.get('title') or c['course_code']})" for c in courses])
@@ -708,9 +734,14 @@ Student Question: {user_query}"""
         db.save_chat_message("user", user_query, agent_name="User", session_id=session_id)
         db.save_chat_message("assistant", final_reply, agent_name="Lead Orchestrator (Local Hub)", session_id=session_id)
         
+        speech_sum = f"Here is the course intelligence breakdown and schedule for your modules."
+        if matched_course:
+            speech_sum = f"Here is the course overview and indexed materials for {matched_course.get('title', matched_course['course_code'])}."
+
         return {
             "reply": final_reply,
             "response": final_reply,
+            "speech_summary": speech_sum,
             "agent": "Lead Orchestrator (Local Hub)",
             "model": provider_name_used,
             "term": term,
@@ -742,8 +773,11 @@ Student Question: {user_query}"""
     db.save_chat_message("user", user_query, agent_name="User", session_id=session_id)
     db.save_chat_message("assistant", composed_reply, agent_name="Lead Orchestrator", session_id=session_id)
 
+    speech_sum = extract_speech_summary(final_reply)
+
     return {
         "reply": composed_reply,
+        "speech_summary": speech_sum,
         "agent": "Lead Orchestrator",
         "delegation_steps": delegation_steps,
         "model": provider_name_used,

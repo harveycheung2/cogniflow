@@ -489,6 +489,25 @@ body {
   box-shadow: 0 0 10px rgba(16, 185, 129, 0.35);
 }
 
+.voice-countdown-badge {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgba(0, 242, 254, 0.15);
+  border: 1px solid var(--accent-cyan);
+  color: var(--accent-cyan);
+  font-size: 0.74rem;
+  font-weight: 600;
+  white-space: nowrap;
+  animation: pulse-countdown 1s infinite alternate;
+}
+@keyframes pulse-countdown {
+  0% { opacity: 0.8; transform: scale(0.99); }
+  100% { opacity: 1; transform: scale(1.02); }
+}
+
 .btn-mic {
   display: inline-flex;
   align-items: center;
@@ -1335,7 +1354,7 @@ body {
         </div>
 
         <div id="chat-messages" class="chat-messages">
-          <div class="chat-bubble assistant">
+          <div class="chat-bubble assistant" data-speech-summary="Welcome to CogniFlow OS! Ask me about your courses, tutorials, or exam schedule.">
             <div class="sender-tag">Lead Orchestrator</div>
             <button type="button" class="btn-read-bubble" onclick="readBubbleText(this)" title="Read aloud">&#128266; Listen</button>
             <div class="bubble-text-content">
@@ -1349,7 +1368,8 @@ body {
           <button type="button" id="btn-mic" class="btn-mic" onclick="toggleSpeechRecognition()" title="Voice input: Click to speak (Chrome / Edge / Safari)">
             <span id="mic-icon">&#127908;</span>
           </button>
-          <input type="text" id="chat-input" placeholder="Ask your Lead Agent (or click 🎙️ mic to speak)..." autocomplete="off" />
+          <input type="text" id="chat-input" placeholder="Ask your Lead Agent (or click 🎙️ mic to speak)..." autocomplete="off" oninput="handleChatInputChange()" onkeydown="handleChatInputKeydown(event)" />
+          <span id="voice-countdown-badge" class="voice-countdown-badge">&#9203; Sending in <span id="countdown-num">3</span>s... <a href="javascript:void(0)" onclick="cancelVoiceCountdown()" style="color: var(--text-main); text-decoration: underline; margin-left: 4px;">Edit</a></span>
           <button type="submit" class="btn btn-primary" id="btn-send">Send</button>
         </form>
       </section>
@@ -1862,10 +1882,18 @@ async function fetchExtractedSchedules() {
 }
 
 async function handleChatSubmit(e) {
-  e.preventDefault();
+  if (e && e.preventDefault) e.preventDefault();
+  clearVoiceCountdown();
+
   const input = document.getElementById("chat-input");
   const message = input.value.trim();
   if (!message) return;
+
+  // Auto turn on voice read aloud if sent through mic
+  if (wasVoiceInput) {
+    setAutoReadAloud(true);
+  }
+  wasVoiceInput = false;
 
   input.value = "";
   appendChatMessage("user", message, "You");
@@ -1897,7 +1925,7 @@ async function handleChatSubmit(e) {
     });
     const data = await res.json();
     document.getElementById("thinking-indicator")?.remove();
-    appendChatMessage("assistant", data.reply, data.agent || "Lead Orchestrator");
+    appendChatMessage("assistant", data.reply, data.agent || "Lead Orchestrator", data.speech_summary);
   } catch (err) {
     document.getElementById("thinking-indicator")?.remove();
     appendChatMessage("assistant", "Error reaching multi-agent backend: " + err, "System");
@@ -1913,7 +1941,7 @@ function sendPrompt(promptText) {
   document.getElementById("chat-form").dispatchEvent(new Event("submit"));
 }
 
-function appendChatMessage(role, content, senderName) {
+function appendChatMessage(role, content, senderName, speechSummary) {
   const container = document.getElementById("chat-messages");
   const bubble = document.createElement("div");
   bubble.className = `chat-bubble ${role}`;
@@ -1951,6 +1979,11 @@ function appendChatMessage(role, content, senderName) {
     ? `<button type="button" class="btn-read-bubble" onclick="readBubbleText(this)" title="Read aloud">&#128266; Listen</button>` 
     : '';
 
+  const finalSpeech = speechSummary ? cleanTextForSpeech(speechSummary) : cleanTextForSpeech(content);
+  if (role === "assistant") {
+    bubble.dataset.speechSummary = finalSpeech;
+  }
+
   bubble.innerHTML = `
     <div class="sender-tag">${escapeHtml(senderName)}</div>
     ${listenBtnHtml}
@@ -1960,19 +1993,24 @@ function appendChatMessage(role, content, senderName) {
   container.scrollTop = container.scrollHeight;
 
   if (role === "assistant" && autoReadAloud) {
-    speakText(content);
+    speakText(finalSpeech);
   }
 }
 
 
 /* ============================================================
    VOICE INTEGRATION (Web Speech API - Native STT & TTS)
-   Zero external cost, ultra-low latency speech recognition & read-aloud
+   - Skip all emojis, read only concise 1-2 sentence summaries
+   - 3-second auto-send countdown after mic recording stops (cancelled if edited)
+   - Auto-enables voice read-aloud when message is sent via mic
    ============================================================ */
 let recognition = null;
 let isRecognizing = false;
 let autoReadAloud = false;
 let currentUtterance = null;
+let wasVoiceInput = false;
+let voiceCountdownTimer = null;
+let voiceCountdownSeconds = 3;
 
 function initSpeechRecognition() {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -1987,10 +2025,11 @@ function initSpeechRecognition() {
 
   recog.onstart = () => {
     isRecognizing = true;
+    clearVoiceCountdown();
     const micBtn = document.getElementById("btn-mic");
     if (micBtn) micBtn.classList.add("listening");
     const input = document.getElementById("chat-input");
-    if (input) input.placeholder = "Listening... Speak into your microphone";
+    if (input) input.placeholder = "Listening... Speak now";
   };
 
   recog.onresult = (event) => {
@@ -2006,14 +2045,14 @@ function initSpeechRecognition() {
 
   recog.onerror = (event) => {
     console.warn("Speech recognition error:", event.error);
-    stopSpeechRecognition();
+    stopSpeechRecognition(false);
     if (event.error === "not-allowed") {
       alert("Microphone access was denied. Please allow microphone permissions in your browser address bar.");
     }
   };
 
   recog.onend = () => {
-    stopSpeechRecognition();
+    stopSpeechRecognition(false);
   };
 
   return recog;
@@ -2028,8 +2067,9 @@ function toggleSpeechRecognition() {
 
   if (isRecognizing) {
     if (recognition) recognition.stop();
-    stopSpeechRecognition();
+    stopSpeechRecognition(true);
   } else {
+    clearVoiceCountdown();
     if (window.speechSynthesis) window.speechSynthesis.cancel();
     if (!recognition) {
       recognition = initSpeechRecognition();
@@ -2044,7 +2084,7 @@ function toggleSpeechRecognition() {
   }
 }
 
-function stopSpeechRecognition() {
+function stopSpeechRecognition(userClickedStop = false) {
   isRecognizing = false;
   const micBtn = document.getElementById("btn-mic");
   if (micBtn) micBtn.classList.remove("listening");
@@ -2052,10 +2092,72 @@ function stopSpeechRecognition() {
   if (input && input.placeholder.startsWith("Listening")) {
     input.placeholder = "Ask your Lead Agent (or click 🎙️ mic to speak)...";
   }
+
+  // If text was recognized, trigger the 3-second auto-send countdown
+  if (input && input.value.trim().length > 0) {
+    startVoiceCountdown();
+  }
 }
 
-function toggleAutoReadAloud() {
-  autoReadAloud = !autoReadAloud;
+function startVoiceCountdown() {
+  const input = document.getElementById("chat-input");
+  if (!input || !input.value.trim()) return;
+
+  clearVoiceCountdown();
+  wasVoiceInput = true;
+  voiceCountdownSeconds = 3;
+
+  const badge = document.getElementById("voice-countdown-badge");
+  const numSpan = document.getElementById("countdown-num");
+  const sendBtn = document.getElementById("btn-send");
+
+  if (badge) badge.style.display = "inline-flex";
+  if (numSpan) numSpan.innerText = voiceCountdownSeconds;
+  if (sendBtn) sendBtn.innerText = `Send (${voiceCountdownSeconds}s)`;
+
+  voiceCountdownTimer = setInterval(() => {
+    voiceCountdownSeconds--;
+    if (voiceCountdownSeconds > 0) {
+      if (numSpan) numSpan.innerText = voiceCountdownSeconds;
+      if (sendBtn) sendBtn.innerText = `Send (${voiceCountdownSeconds}s)`;
+    } else {
+      clearVoiceCountdown();
+      setAutoReadAloud(true);
+      const form = document.getElementById("chat-form");
+      if (form) form.dispatchEvent(new Event("submit"));
+    }
+  }, 1000);
+}
+
+function clearVoiceCountdown() {
+  if (voiceCountdownTimer) {
+    clearInterval(voiceCountdownTimer);
+    voiceCountdownTimer = null;
+  }
+  const badge = document.getElementById("voice-countdown-badge");
+  const sendBtn = document.getElementById("btn-send");
+  if (badge) badge.style.display = "none";
+  if (sendBtn && !sendBtn.disabled) sendBtn.innerText = "Send";
+}
+
+function cancelVoiceCountdown() {
+  clearVoiceCountdown();
+}
+
+function handleChatInputChange() {
+  if (voiceCountdownTimer) {
+    cancelVoiceCountdown();
+  }
+}
+
+function handleChatInputKeydown(e) {
+  if (voiceCountdownTimer) {
+    cancelVoiceCountdown();
+  }
+}
+
+function setAutoReadAloud(enable) {
+  autoReadAloud = enable;
   const icon = document.getElementById("voice-toggle-icon");
   const text = document.getElementById("voice-toggle-text");
   const btn = document.getElementById("btn-voice-toggle");
@@ -2079,14 +2181,32 @@ function toggleAutoReadAloud() {
   }
 }
 
+function toggleAutoReadAloud() {
+  setAutoReadAloud(!autoReadAloud);
+}
+
 function cleanTextForSpeech(raw) {
   if (!raw) return "";
-  let clean = raw.replace(/\[OPEN_DOC:[^\]]+\]/g, "");
-  clean = clean.replace(/<[^>]*>/g, ""); // strip HTML tags
-  clean = clean.replace(/[*_#`~|]/g, ""); // strip markdown formatting
-  clean = clean.replace(/https?:\/\/\S+/g, ""); // strip URLs
-  clean = clean.replace(/&[a-z]+;/g, " "); // strip entities
-  return clean.trim();
+  let clean = raw.replace(/\[OPEN_DOC:[^\]]+\]/g, " ");
+  clean = clean.replace(/<[^>]*>/g, " ");
+  clean = clean.replace(/[#*_`~|]/g, " ");
+  clean = clean.replace(/^\s*[-•*]\s+/gm, " ");
+  clean = clean.replace(/https?:\/\/\S+/g, " ");
+  
+  // Strip all Unicode emojis
+  clean = clean.replace(/[\u{1F1E0}-\u{1F1FF}\u{1F300}-\u{1F5FF}\u{1F600}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, " ");
+  clean = clean.replace(/&#\d+;/g, " ");
+  clean = clean.replace(/&[a-z]+;/g, " ");
+  clean = clean.replace(/\s+/g, " ").trim();
+
+  // Extract short summary (first 1-2 clean sentences, max 180 chars)
+  const sentences = clean.split(/(?<=[.!?])\s+/);
+  const shortSentences = sentences.filter(s => s.length > 5);
+  let summary = shortSentences.slice(0, 2).join(" ");
+  if (summary.length > 180) {
+    summary = summary.substring(0, 177).replace(/\s+\S*$/, "") + "...";
+  }
+  return summary || clean.substring(0, 160);
 }
 
 function speakText(text, onEndCallback) {
@@ -2141,8 +2261,7 @@ function readBubbleText(btnElement) {
   const bubble = btnElement.closest(".chat-bubble");
   if (!bubble) return;
 
-  const contentEl = bubble.querySelector(".bubble-text-content") || bubble;
-  const textToRead = contentEl.innerText || contentEl.textContent;
+  const textToRead = bubble.dataset.speechSummary || bubble.querySelector(".bubble-text-content")?.innerText || bubble.innerText;
 
   btnElement.classList.add("speaking");
   btnElement.innerHTML = "&#9209; Stop";
