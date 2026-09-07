@@ -327,6 +327,183 @@ def execute_subagent_tool(name: str, args: Dict[str, Any], term: str = "26S1") -
 
     return {"error": f"Unknown tool {name}"}
 
+def build_course_dossier_hub(courses: List[Dict[str, Any]], target_course: Optional[Dict[str, Any]], user_query: str, term: str = "26S1") -> str:
+    """
+    Constructs a Course-Sorted Offline Intelligence Dossier Hub.
+    Groups course materials, assessment milestones, and announcements by module,
+    with interactive tabs allowing the user to filter or view all modules.
+    """
+    import uuid
+    hub_id = f"dossier-hub-{uuid.uuid4().hex[:6]}"
+    target_clean = ""
+    if target_course:
+        tc_match = re.search(r'\b([A-Z]{2,4}\d{4}[A-Z]?)\b', target_course.get("course_code", ""), re.IGNORECASE)
+        target_clean = tc_match.group(1).upper() if tc_match else ""
+
+    q_lower = user_query.lower()
+    is_test_query = any(w in q_lower for w in ["test", "exam", "quiz", "mock", "ca1", "ca2", "assessment"])
+    is_sched_query = any(w in q_lower for w in ["schedule", "timetable", "dates", "calendar", "timeline", "week", "outline", "syllabus"])
+
+    # Collect and sort unique courses
+    unique_courses = []
+    seen_codes = set()
+    
+    if target_course:
+        t_code = target_clean or target_course.get("course_code", "")
+        unique_courses.append(target_course)
+        seen_codes.add(t_code)
+
+    for c in courses:
+        raw_c = c.get("course_code", "")
+        cm = re.search(r'\b([A-Z]{2,4}\d{4}[A-Z]?)\b', raw_c, re.IGNORECASE)
+        clean = cm.group(1).upper() if cm else raw_c
+        if clean not in seen_codes:
+            unique_courses.append(c)
+            seen_codes.add(clean)
+
+    # Build Navigation Tabs
+    tab_pills = []
+    default_tab = target_clean if target_clean else "all"
+    
+    active_all_cls = "active" if default_tab == "all" else ""
+    tab_pills.append(f'''<button class="dossier-tab-btn {active_all_cls}" onclick="switchDossierCourse(\'{hub_id}\', \'all\')">&#128293; All Courses ({len(unique_courses)})</button>''')
+
+    for c in unique_courses:
+        raw_c = c.get("course_code", "")
+        cm = re.search(r'\b([A-Z]{2,4}\d{4}[A-Z]?)\b', raw_c, re.IGNORECASE)
+        clean = cm.group(1).upper() if cm else raw_c
+        active_cls = "active" if default_tab == clean else ""
+        tab_pills.append(f'''<button class="dossier-tab-btn {active_cls}" onclick="switchDossierCourse(\'{hub_id}\', \'{clean}\')">&#128218; {clean}</button>''')
+
+    tabs_html = "\n".join(tab_pills)
+
+    # Build Course Cards
+    course_cards = []
+    for c in unique_courses:
+        raw_c = c.get("course_code", "")
+        title = c.get("title", "")
+        cm = re.search(r'\b([A-Z]{2,4}\d{4}[A-Z]?)\b', raw_c, re.IGNORECASE)
+        clean = cm.group(1).upper() if cm else raw_c
+
+        # Retrieve course data
+        all_mats = db.get_all_materials(course_code=clean)
+        tasks = [t for t in db.get_tasks(term=term) if clean in str(t.get("course_code", "")) or clean in str(t.get("title", ""))]
+        anns = db.get_announcements(term=term, course_code=clean, limit=4)
+
+        # Categorize materials
+        syllabus_docs = [m for m in all_mats if any(k in m.get("title", "").lower() for k in ["hand00", "syllabus", "schedule", "outline", "overview"])]
+        test_docs = [m for m in all_mats if any(k in m.get("title", "").lower() for k in ["test", "mock", "exam", "quiz", "ca1", "ca2"])]
+        tut_docs = [m for m in all_mats if any(k in m.get("title", "").lower() for k in ["tutorial", "tut"])]
+        lec_docs = [m for m in all_mats if any(k in m.get("title", "").lower() for k in ["hand", "lec", "slide", "lecture"]) and m not in syllabus_docs]
+
+        # Top highlight doc
+        primary_doc = syllabus_docs[0] if syllabus_docs else (test_docs[0] if test_docs else (all_mats[0] if all_mats else None))
+
+        # Build Materials List HTML
+        doc_links = []
+        if syllabus_docs:
+            for s in syllabus_docs[:2]:
+                doc_links.append(f'''<a href="/api/materials/file/{s["id"]}" target="_blank" class="dossier-doc-link"><span class="dossier-tag tag-syllabus">Syllabus</span> <strong>{s["title"]}</strong></a>''')
+        if test_docs:
+            for td in test_docs[:2]:
+                doc_links.append(f'''<a href="/api/materials/file/{td["id"]}" target="_blank" class="dossier-doc-link"><span class="dossier-tag tag-test">Mock Exam</span> <strong>{td["title"]}</strong></a>''')
+        if tut_docs:
+            for tu in tut_docs[:2]:
+                doc_links.append(f'''<a href="/api/materials/file/{tu["id"]}" target="_blank" class="dossier-doc-link"><span class="dossier-tag tag-tutorial">Problem Set</span> <strong>{tu["title"]}</strong></a>''')
+        elif lec_docs:
+            for ld in lec_docs[:2]:
+                doc_links.append(f'''<a href="/api/materials/file/{ld["id"]}" target="_blank" class="dossier-doc-link"><span class="dossier-tag tag-lecture">Lecture</span> <strong>{ld["title"]}</strong></a>''')
+
+        if not doc_links:
+            doc_links.append('<span style="color:var(--text-muted); font-size:0.75rem;">No direct PDF files indexed for this module yet.</span>')
+
+        docs_col_html = "".join(doc_links)
+
+        # Build Tasks & Assessments HTML
+        task_items = []
+        if tasks:
+            for t in tasks[:3]:
+                due = t.get("due_date") or "Upcoming"
+                score = t.get("priority_score", 7.0)
+                task_items.append(f'''<div class="dossier-task-item"><span class="dossier-score-tag">Score: {score}</span> <div><strong>{t["title"]}</strong> <div style="font-size:0.7rem; color:var(--text-muted);">Due: {due}</div></div></div>''')
+        else:
+            task_items.append(f'''<div class="dossier-task-item"><span class="dossier-score-tag" style="background:rgba(0,242,254,0.15); color:var(--accent-cyan);">Info</span> <div>Continuous Assessment / Midterms during AY2026/27 Sem 1</div></div>''')
+
+        tasks_col_html = "".join(task_items)
+
+        # Build Announcements HTML
+        ann_items = []
+        if anns:
+            for a in anns[:2]:
+                posted = a.get("posted_at") or "Recent"
+                ann_items.append(f'''<div class="dossier-ann-item"><strong>{a["title"]}</strong><span style="font-size:0.68rem; color:var(--text-muted); display:block; margin-top:2px;">{posted}</span></div>''')
+        else:
+            ann_items.append('<div style="color:var(--text-muted); font-size:0.75rem;">No urgent announcements posted.</div>')
+
+        anns_col_html = "".join(ann_items)
+
+        is_card_visible = "style=\"display:block;\"" if (default_tab == "all" or default_tab == clean) else "style=\"display:none;\""
+
+        card_html = f'''
+        <div class="dossier-course-card" data-course="{clean}" {is_card_visible}>
+          <div class="dossier-card-head">
+            <div>
+              <span class="dossier-course-badge">{clean}</span>
+              <span class="dossier-course-title">{title}</span>
+            </div>
+            <span class="dossier-mats-count">{len(all_mats)} files indexed</span>
+          </div>
+
+          <div class="dossier-card-grid">
+            <!-- Col 1: Materials -->
+            <div class="dossier-col">
+              <div class="dossier-col-title">&#128196; Essential Course Files</div>
+              <div class="dossier-col-body">{docs_col_html}</div>
+            </div>
+
+            <!-- Col 2: Assessments -->
+            <div class="dossier-col">
+              <div class="dossier-col-title">&#9200; Assessments & Tasks</div>
+              <div class="dossier-col-body">{tasks_col_html}</div>
+            </div>
+
+            <!-- Col 3: Announcements -->
+            <div class="dossier-col">
+              <div class="dossier-col-title">&#128227; Official Notices</div>
+              <div class="dossier-col-body">{anns_col_html}</div>
+            </div>
+          </div>
+        </div>
+        '''
+        course_cards.append(card_html)
+
+    cards_html = "".join(course_cards)
+
+    return f'''<!-- COURSE_DOSSIER_HUB -->
+<div class="course-dossier-hub" id="{hub_id}">
+  <div class="dossier-header-bar">
+    <div>
+      <h3 style="margin:0; font-size:1.05rem; color:#fff; display:flex; align-items:center; gap:8px;">
+        &#9889; Course Intelligence Hub (Local Failsafe)
+      </h3>
+      <div style="font-size:0.74rem; color:var(--text-muted); margin-top:2px;">
+        Sorted by Course Module &bull; Direct SQLite Database Query &bull; Zero Cloud Token Cost
+      </div>
+    </div>
+    <span class="dossier-mode-badge">&#9889; Fast Local Engine</span>
+  </div>
+
+  <div class="dossier-tabs-strip">
+    {tabs_html}
+  </div>
+
+  <div class="dossier-cards-list">
+    {cards_html}
+  </div>
+</div>
+'''
+
+
 def execute_chat_query(user_query: str, term: str = "26S1", session_id: str = "default") -> Dict[str, Any]:
     courses = db.get_all_courses(term=term)
     courses_str = ", ".join([f"{c['course_code']} ({c.get('title') or c['course_code']})" for c in courses])
@@ -523,109 +700,24 @@ Student Question: {user_query}"""
 
     # If offline, expired credentials, or fallback required
     if not final_reply or "Bedrock tool execution error" in final_reply:
-        q_lower = user_query.lower()
-        is_test_query = any(w in q_lower for w in ["test", "exam", "quiz", "mock", "ca1", "ca2", "assessment"])
-        is_sched_query = any(w in q_lower for w in ["schedule", "timetable", "dates", "calendar", "timeline", "week", "outline", "syllabus"])
-
-        # Execute Document Specialist for the accurately resolved module
-        subagent_res = execute_subagent_tool(
-            "task_document_specialist",
-            {
-                "course_code": target_code,
-                "task_type": "schedule_and_tests" if (is_sched_query or is_test_query) else "general_search",
-                "detail": user_query
-            },
-            term=term
-        )
-        delegation_steps.append({
-            "agent": "Document Specialist Agent",
-            "action": f"Inspected course documents & timetable for {target_code}",
-            "input": {"course_code": target_code, "query": user_query},
-            "result_summary": subagent_res.get("finding", f"Found materials for {target_code}")
-        })
-
-        # Execute NTULearn Specialist for notices
-        ntulearn_res = execute_subagent_tool("task_ntulearn_specialist", {"course_code": target_code}, term=term)
-        delegation_steps.append({
-            "agent": "NTULearn Specialist",
-            "action": f"Retrieved announcements & CA notices for {target_code}",
-            "input": {"course_code": target_code},
-            "result_summary": ntulearn_res.get("finding", "")
-        })
-
-        # Gather target course tasks & materials
-        course_tasks = [t for t in db.get_tasks(term=term) if target_code in str(t.get("course_code", "")) or target_code in str(t.get("title", ""))]
-        all_course_mats = db.get_all_materials(course_code=target_code)
-        course_anns = db.get_announcements(term=term, course_code=target_code, limit=5)
-
-        # Categorize documents
-        syllabus_docs = [m for m in all_course_mats if any(k in m['title'].lower() for k in ['hand00', 'syllabus', 'schedule', 'outline', 'overview'])]
-        test_docs = [m for m in all_course_mats if any(k in m['title'].lower() for k in ['test', 'mock', 'exam', 'quiz'])]
-        tut_docs = [m for m in all_course_mats if any(k in m['title'].lower() for k in ['tutorial', 'tut'])]
-
-        # Primary highlight document
-        primary_doc = syllabus_docs[0] if syllabus_docs else (test_docs[0] if test_docs else (all_course_mats[0] if all_course_mats else None))
-        doc_token = f"[OPEN_DOC:{primary_doc['id']}:{primary_doc['title']}]" if primary_doc else ""
-
-        # Test Prep tokens
-        test_tokens = [f"[OPEN_DOC:{m['id']}:{m['title']}]" for m in test_docs[:3]]
-
-        # Construct authoritative course-specific response
-        reply_lines = [
-            f"### 📅 **{target_code}: Semester Schedule & Assessment Intelligence**",
-            f"**Module:** `{target_course_code}` ({target_course_title})",
-            f"**Current Academic Timeline:** Currently in **Week 4/5 of Semester 1 (AY2026/27)**.\n"
-        ]
-
-        if is_test_query or is_sched_query:
-            reply_lines.append("#### 📝 Upcoming Tests & Assessment Milestones:")
-            if course_tasks:
-                for t in course_tasks:
-                    reply_lines.append(f"- **Task Alert:** **{t['title']}** (Urgency Score: `{t.get('priority_score', '9.0')}`) — *Due: {t.get('due_date', 'Upcoming')}*")
-            else:
-                reply_lines.append(f"- **Upcoming Assessment:** Continuous Assessment / Test 1 scheduled during Semester 1.")
-
-            # Test announcements
-            test_notices = [a for a in course_anns if any(k in a['title'].lower() for k in ['test', 'venue', 'exam', 'quiz'])]
-            if test_notices:
-                for a in test_notices:
-                    reply_lines.append(f"- **Official Notice:** **{a['title']}** (Posted: {a.get('posted_at') or 'Recent'})")
-
-            if test_tokens:
-                reply_lines.append("\n**Test Preparation Documents & Mock Papers:**")
-                for tk in test_tokens:
-                    reply_lines.append(f"- {tk}")
-
-            reply_lines.append("\n#### 📑 Course Outline & Syllabus Document:")
-            if doc_token:
-                reply_lines.append(f"{doc_token}\n*Click above to open the official syllabus schedule, topic distribution, and grading scheme.*")
-            else:
-                reply_lines.append(f"- *Review lecture handouts and tutorial sheets in the course portal.*")
-
-            reply_lines.append("\n#### 📚 Weekly Lectures & Active Tutorials:")
-            reply_lines.append(f"- **Lecture Series:** Handouts released up to Week 4/5 (Hand01 to Hand04).")
-            if tut_docs:
-                tut_tokens = [f"[OPEN_DOC:{t['id']}:{t['title']}]" for t in tut_docs[:3]]
-                reply_lines.append(f"- **Active Problem Sets:** {' | '.join(tut_tokens)}")
-
-        else:
-            # Tutorial or general search response
-            reply_lines.append("#### 📄 Key Course Documents & Materials:")
-            if doc_token:
-                reply_lines.append(f"{doc_token}")
-            if tut_docs:
-                for td in tut_docs[:3]:
-                    reply_lines.append(f"- [OPEN_DOC:{td['id']}:{td['title']}]")
-
-            reply_lines.append("\n#### 🎯 Immediate Action Required:")
-            reply_lines.append(f"- Review active lecture materials and complete this week's assigned tutorial exercises.")
-
-        if course_anns:
-            reply_lines.append("\n#### 📢 Recent Course Announcements:")
-            for a in course_anns[:3]:
-                reply_lines.append(f"- **{a['title']}**")
-
-        final_reply = "\n".join(reply_lines)
+        all_courses = db.get_all_courses(term=term)
+        final_reply = build_course_dossier_hub(all_courses, matched_course, user_query, term=term)
+        provider_name_used = "Local Course Intelligence Hub"
+        
+        # Save to database
+        db.save_chat_message("user", user_query, agent_name="User", session_id=session_id)
+        db.save_chat_message("assistant", final_reply, agent_name="Lead Orchestrator (Local Hub)", session_id=session_id)
+        
+        return {
+            "reply": final_reply,
+            "response": final_reply,
+            "agent": "Lead Orchestrator (Local Hub)",
+            "model": provider_name_used,
+            "term": term,
+            "delegation_steps": delegation_steps,
+            "subagents_called": [s["agent"] for s in delegation_steps],
+            "execution_mode": "offline_course_hub",
+        }
 
     # Build visible compact Sub-Agent Delegation badges
     delegation_callout = ""
