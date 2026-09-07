@@ -497,7 +497,14 @@ def save_chat_message(role: str, content: str, agent_name: str = "Lead Orchestra
 
 def get_chat_history(session_id: str = "default", limit: int = 50) -> List[Dict[str, Any]]:
     with get_connection() as conn:
-        rows = conn.execute("SELECT * FROM chat_messages WHERE session_id = ? ORDER BY id ASC LIMIT ?", (session_id, limit)).fetchall()
+        rows = conn.execute("""
+            SELECT * FROM (
+                SELECT * FROM chat_messages 
+                WHERE session_id = ? 
+                ORDER BY id DESC 
+                LIMIT ?
+            ) ORDER BY id ASC
+        """, (session_id, limit)).fetchall()
         return [dict(r) for r in rows]
 
 def save_timetable_document(doc_id: str, file_name: str, file_path: str, file_size: int,

@@ -1,15 +1,23 @@
+import io
 import json
 import re
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 from datetime import datetime
+
 try:
     import pdfplumber
 except ImportError:
     pdfplumber = None
 
+try:
+    import pypdfium2 as pdfium
+except ImportError:
+    pdfium = None
+
 import core.database as db
 from core.config import BASE_DIR
+from services.aws_bedrock import bedrock_client
 
 TIMETABLE_DIR = BASE_DIR / "data" / "timetable"
 TIMETABLE_DIR.mkdir(parents=True, exist_ok=True)
@@ -18,13 +26,138 @@ class TimetableService:
     def __init__(self):
         self.timetable_dir = TIMETABLE_DIR
 
+    def parse_timetable_with_vision(self, img_bytes: bytes) -> Optional[Dict[str, Any]]:
+        """Use AWS Bedrock Claude Haiku Vision to extract timetable details from an image."""
+        prompt = """Analyze this university timetable image.
+Extract all details as JSON with this exact schema:
+{
+  "student_name": string,
+  "academic_year": string,
+  "semester": string,
+  "term": string,
+  "total_courses": number,
+  "total_aus": number,
+  "courses": [
+     {"index": string, "course_code": string, "title": string, "aus": number, "status": string, "exam_schedule": string}
+  ],
+  "weekly_slots": [
+     {"day": string, "course_code": string, "event_type": string, "group": string, "venue": string, "start_time": string, "end_time": string, "weeks": string}
+  ]
+}
+Output strictly JSON without markdown fences."""
+        try:
+            resp = bedrock_client._client.converse(
+                modelId='us.anthropic.claude-haiku-4-5-20251001-v1:0',
+                messages=[
+                    {
+                        'role': 'user',
+                        'content': [
+                            {'image': {'format': 'png', 'source': {'bytes': img_bytes}}},
+                            {'text': prompt}
+                        ]
+                    }
+                ],
+                inferenceConfig={'maxTokens': 3500, 'temperature': 0.1}
+            )
+            txt = resp['output']['message']['content'][0]['text']
+            clean_json = re.sub(r'^```json\s*', '', txt.strip())
+            clean_json = re.sub(r'\s*```$', '', clean_json).strip()
+            data = json.loads(clean_json)
+
+            courses = []
+            for c in data.get("courses", []):
+                aus_val = c.get("aus") or c.get("au") or 0
+                try:
+                    aus_int = int(aus_val)
+                except Exception:
+                    aus_int = 0
+                courses.append({
+                    "index": str(c.get("index") or ""),
+                    "course_code": str(c.get("course_code") or "").upper(),
+                    "title": str(c.get("title") or ""),
+                    "aus": aus_int,
+                    "status": str(c.get("status") or c.get("course_type") or "Registered"),
+                    "exam_schedule": str(c.get("exam_schedule") or "Not Applicable")
+                })
+
+            weekly_slots = []
+            for s in data.get("weekly_slots", []):
+                st = str(s.get("start_time") or "")
+                et = str(s.get("end_time") or "")
+                time_range = f"{st} - {et}" if st and et else ""
+                day_clean = str(s.get("day") or "").upper()[:3]
+                weekly_slots.append({
+                    "day": day_clean,
+                    "course_code": str(s.get("course_code") or "").upper(),
+                    "event_type": str(s.get("event_type") or "Class"),
+                    "group": str(s.get("group") or s.get("group_id") or ""),
+                    "venue": str(s.get("venue") or ""),
+                    "start_time": st,
+                    "end_time": et,
+                    "time_range": time_range,
+                    "weeks": str(s.get("weeks") or s.get("teaching_weeks") or "All Weeks"),
+                    "raw_entry": f"{s.get('course_code', '')} {s.get('event_type', '')}"
+                })
+
+            day_order = {"MON": 1, "TUE": 2, "WED": 3, "THU": 4, "FRI": 5, "SAT": 6, "SUN": 7}
+            weekly_slots.sort(key=lambda s: (day_order.get(s.get("day", ""), 9), s.get("start_time", "")))
+
+            tot_c = data.get("total_courses") or len(courses)
+            tot_a = data.get("total_aus") or sum(c["aus"] for c in courses)
+
+            s_name = str(data.get("student_name") or "")
+            if s_name.lower() in ["not specified", "unknown", "student", "none", "n/a"]:
+                s_name = ""
+
+            return {
+                "student_name": s_name,
+                "academic_year": data.get("academic_year", "2026"),
+                "semester": data.get("semester", "Semester 1"),
+                "term": data.get("term", "26S1"),
+                "total_courses": tot_c,
+                "total_aus": tot_a,
+                "courses": courses,
+                "weekly_slots": weekly_slots
+            }
+        except Exception as e:
+            print(f"[TimetableService] Vision extraction error: {e}")
+            return None
+
     def parse_timetable_pdf(self, pdf_path: Path) -> Dict[str, Any]:
-        """Extract all structured academic and schedule information from an NTU STARS Timetable PDF."""
-        with pdfplumber.open(str(pdf_path)) as pdf:
-            p0 = pdf.pages[0]
-            words = p0.extract_words()
-            raw_text = p0.extract_text() or ""
-            tables = p0.extract_tables()
+        """Extract all structured academic and schedule information from an NTU STARS Timetable PDF or image."""
+        if pdf_path.suffix.lower() in [".png", ".jpg", ".jpeg"]:
+            with open(pdf_path, "rb") as f:
+                v_res = self.parse_timetable_with_vision(f.read())
+                if v_res:
+                    return v_res
+
+        words = []
+        raw_text = ""
+        tables = []
+        if pdfplumber:
+            try:
+                with pdfplumber.open(str(pdf_path)) as pdf:
+                    if len(pdf.pages) > 0:
+                        p0 = pdf.pages[0]
+                        words = p0.extract_words() or []
+                        raw_text = p0.extract_text() or ""
+                        tables = p0.extract_tables() or []
+            except Exception as e:
+                print(f"[TimetableService] pdfplumber error: {e}")
+
+        # If text extraction yielded fewer than 15 words, fall back to vision rendering
+        if len(words) < 15 and pdfium:
+            try:
+                p_doc = pdfium.PdfDocument(str(pdf_path))
+                page = p_doc[0]
+                pil_img = page.render(scale=2.0).to_pil()
+                buf = io.BytesIO()
+                pil_img.save(buf, format="PNG")
+                v_res = self.parse_timetable_with_vision(buf.getvalue())
+                if v_res and v_res.get("courses"):
+                    return v_res
+            except Exception as e:
+                print(f"[TimetableService] Vision fallback error: {e}")
 
         # 1. Student Name
         student_name = ""
@@ -281,20 +414,27 @@ class TimetableService:
         return db.get_active_timetable(term=term)
 
     def seed_default_if_needed(self, term: str = "26S1") -> Optional[Dict[str, Any]]:
-        """Seed the sample timetable if available and no active timetable is in the database."""
+        """Seed or reload timetable if active timetable is missing or empty."""
         existing = self.get_active_timetable(term=term)
-        if existing:
+        if existing and existing.get("total_courses", 0) > 0:
             return existing
 
-        default_file = self.timetable_dir / "harvey_timetable_2026s1.pdf"
-        if default_file.exists():
-            try:
-                parsed = self.parse_timetable_pdf(default_file)
-                saved = self.save_timetable(parsed, default_file, default_file.name)
-                print(f"[TimetableService] Automatically seeded default timetable for {parsed.get('student_name')}")
-                return db.get_active_timetable(term=term)
-            except Exception as e:
-                print(f"[TimetableService] Error seeding default timetable: {e}")
-        return None
+        # Check for uploaded schedule or sample timetable
+        candidate_files = [
+            self.timetable_dir / "uploaded_Y2S1 Schedule.pdf",
+            self.timetable_dir / "Y2S1 Schedule.pdf",
+            self.timetable_dir / "sample_timetable_2026s1.pdf"
+        ]
+        for c_file in candidate_files:
+            if c_file.exists():
+                try:
+                    parsed = self.parse_timetable_pdf(c_file)
+                    if parsed and parsed.get("courses"):
+                        self.save_timetable(parsed, c_file, c_file.name.replace("uploaded_", ""))
+                        print(f"[TimetableService] Automatically parsed timetable from {c_file.name}: {len(parsed['courses'])} courses")
+                        return db.get_active_timetable(term=term)
+                except Exception as e:
+                    print(f"[TimetableService] Error processing candidate {c_file.name}: {e}")
+        return existing
 
 timetable_service = TimetableService()
