@@ -731,6 +731,177 @@ body {
 .timetable-saved-meta { font-size: 0.72rem; color: var(--text-muted); margin-top: 2px; }
 .timetable-saved-actions { display: flex; align-items: center; gap: 6px; }
 
+
+/* AI Token Monitor Modal Styles */
+.token-monitor-modal-card {
+  background: #0d121e;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: var(--radius-lg);
+  width: 95vw;
+  max-width: 1060px;
+  max-height: 90vh;
+  display: flex; flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.85);
+  overflow: hidden;
+  animation: modalFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes modalFadeIn {
+  from { opacity: 0; transform: scale(0.97) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.token-modal-header {
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex; justify-content: space-between; align-items: center;
+  background: rgba(18, 24, 38, 0.98);
+}
+.token-modal-body {
+  padding: 20px 24px;
+  overflow-y: auto;
+  max-height: calc(90vh - 75px);
+  display: flex; flex-direction: column; gap: 20px;
+}
+.token-summary-strip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+@media (max-width: 800px) {
+  .token-summary-strip { grid-template-columns: repeat(2, 1fr); }
+}
+.token-stat-box {
+  background: rgba(22, 30, 48, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.token-stat-title {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.token-stat-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.02em;
+}
+.token-stat-subtitle {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.token-models-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+@media (max-width: 900px) {
+  .token-models-grid { grid-template-columns: 1fr; }
+}
+.token-model-card {
+  background: rgba(20, 27, 44, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  display: flex; flex-direction: column; gap: 12px;
+  position: relative;
+  overflow: hidden;
+}
+.token-model-card.active-card {
+  border-color: rgba(0, 242, 254, 0.45);
+  box-shadow: 0 0 16px rgba(0, 242, 254, 0.12);
+}
+.token-card-header {
+  display: flex; justify-content: space-between; align-items: center;
+}
+.token-model-name {
+  font-size: 0.95rem; font-weight: 600; color: #fff; display: flex; align-items: center; gap: 6px;
+}
+.token-badge-active {
+  background: rgba(0, 242, 254, 0.15);
+  color: var(--accent-cyan);
+  border: 1px solid rgba(0, 242, 254, 0.3);
+  font-size: 0.68rem; padding: 2px 8px; border-radius: 12px; font-weight: 600;
+}
+.token-badge-standby {
+  background: rgba(160, 174, 192, 0.15);
+  color: #a0aec0;
+  border: 1px solid rgba(160, 174, 192, 0.3);
+  font-size: 0.68rem; padding: 2px 8px; border-radius: 12px; font-weight: 600;
+}
+.token-bar-wrapper {
+  display: flex; flex-direction: column; gap: 6px;
+}
+.token-bar-label {
+  display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-muted);
+}
+.token-progress-track {
+  height: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+.token-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #00f2fe 0%, #4facfe 100%);
+  border-radius: 4px;
+  transition: width 0.4s ease;
+}
+.token-progress-fill.fill-warn {
+  background: linear-gradient(90deg, #f6d365 0%, #fda085 100%);
+}
+.token-progress-fill.fill-danger {
+  background: linear-gradient(90deg, #ff6b6b 0%, #ee5253 100%);
+}
+.token-metrics-row {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; font-size: 0.75rem;
+  background: rgba(0, 0, 0, 0.25); border-radius: 6px; padding: 8px;
+}
+.token-metric-item { display: flex; flex-direction: column; }
+.token-metric-k { color: var(--text-muted); font-size: 0.68rem; }
+.token-metric-v { color: #fff; font-weight: 600; }
+
+.token-table-wrapper {
+  background: rgba(20, 27, 44, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.token-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+  text-align: left;
+}
+.token-table th {
+  background: rgba(14, 20, 32, 0.9);
+  padding: 10px 14px;
+  color: var(--text-muted);
+  font-weight: 600;
+  border-bottom: 1px solid var(--border-color);
+}
+.token-table td {
+  padding: 9px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  color: #e2e8f0;
+}
+.token-table tr:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+.tag-success {
+  color: #48bb78; background: rgba(72, 187, 120, 0.15); border: 1px solid rgba(72, 187, 120, 0.3);
+  padding: 2px 6px; border-radius: 4px; font-size: 0.68rem; font-weight: 600;
+}
+.tag-fallback {
+  color: #ecc94b; background: rgba(236, 201, 75, 0.15); border: 1px solid rgba(236, 201, 75, 0.3);
+  padding: 2px 6px; border-radius: 4px; font-size: 0.68rem; font-weight: 600;
+}
+
 /* Timetable Modal */
 .modal-backdrop {
   position: fixed; top: 0; left: 0; right: 0; bottom: 0;
@@ -895,7 +1066,7 @@ body {
           </select>
         </div>
 
-        <div id="bedrock-badge" class="status-pill status-loading">
+        <div id="bedrock-badge" class="status-pill status-loading" onclick="openTokenModal()" style="cursor: pointer;" title="AI Token & Quota Monitor (Click to view usage)">
           <span class="dot"></span> Bedrock: Checking...
         </div>
         <div id="ntulearn-badge" class="status-pill status-loading">
@@ -934,7 +1105,7 @@ body {
       <section class="panel chat-panel">
         <div class="panel-header">
           <h2>&#129302; Multi-Agent Lead Orchestrator</h2>
-          <span class="ai-model-tag">AWS Bedrock Claude & Specialist Engine</span>
+          <span class="ai-model-tag" id="ai-model-tag-header" onclick="openTokenModal()" style="cursor: pointer;" title="Click to view AI Token & Quota Monitor">&#9889; AI Cascade (Click to inspect tokens)</span>
         </div>
 
         <div class="prompt-chips" id="prompt-chips">
@@ -1081,12 +1252,16 @@ async function fetchStatus() {
     const data = await res.json();
 
     const bBadge = document.getElementById("bedrock-badge");
-    if (data.bedrock && data.bedrock.ready) {
+    if (data.llm && data.llm.ready) {
+      bBadge.className = "status-pill status-ready";
+      bBadge.innerHTML = `<span class="dot"></span> AI: ${data.llm.primary_provider}`;
+      bBadge.title = data.llm.fallback_chain || "";
+    } else if (data.bedrock && data.bedrock.ready) {
       bBadge.className = "status-pill status-ready";
       bBadge.innerHTML = `<span class="dot"></span> Bedrock: Active (${data.bedrock.region})`;
     } else {
       bBadge.className = "status-pill status-ready";
-      bBadge.innerHTML = `<span class="dot"></span> Agent Core: Online (Hybrid Mode)`;
+      bBadge.innerHTML = `<span class="dot"></span> Agent Core: Hybrid Mode`;
     }
 
     const nBadge = document.getElementById("ntulearn-badge");
@@ -1786,9 +1961,439 @@ function renderTimetableCourses(courses) {
   }).join("");
 }
 
+
+/* AI Token Monitor Dialog Controls */
+function openTokenModal() {
+  const modal = document.getElementById("modal-token-monitor");
+  if (!modal) return;
+  modal.classList.remove("hidden");
+  loadTokenData();
+}
+
+function closeTokenModal() {
+  const modal = document.getElementById("modal-token-monitor");
+  if (modal) modal.classList.add("hidden");
+}
+
+// Close on Escape key
+document.addEventListener("keydown", function(e) {
+  if (e.key === "Escape") {
+    closeTokenModal();
+  }
+});
+
+async function loadTokenData() {
+  try {
+    const res = await fetch("/api/tokens/usage");
+    if (!res.ok) return;
+    const data = await res.json();
+    renderTokenData(data);
+  } catch (err) {
+    console.error("Failed to load token usage:", err);
+  }
+}
+
+function renderTokenData(data) {
+  if (!data || !data.limits) return;
+
+  const today = data.summary.today || {};
+  const overall = data.summary.overall || {};
+  const limits = data.limits || {};
+
+  // 1. Top Strip
+  const tokensToday = today.tokens_today || 0;
+  const promptToday = today.prompt_tokens_today || 0;
+  const compToday = today.completion_tokens_today || 0;
+  const reqToday = today.requests_today || 0;
+  const reqTotal = overall.total_requests || 0;
+  const tokensTotal = overall.total_tokens || 0;
+  const avgLat = Math.round(today.avg_latency_today || overall.avg_latency || 0);
+
+  const elTokensToday = document.getElementById("stat-tokens-today");
+  if (elTokensToday) elTokensToday.textContent = tokensToday.toLocaleString();
+
+  const elPromptComp = document.getElementById("stat-prompt-comp-today");
+  if (elPromptComp) elPromptComp.textContent = `${promptToday.toLocaleString()} prompt / ${compToday.toLocaleString()} comp`;
+
+  const elReqToday = document.getElementById("stat-requests-today");
+  if (elReqToday) elReqToday.textContent = reqToday.toLocaleString();
+
+  const elReqTotal = document.getElementById("stat-requests-total");
+  if (elReqTotal) elReqTotal.textContent = `All-Time: ${reqTotal.toLocaleString()} calls`;
+
+  const elTokensTotal = document.getElementById("stat-tokens-alltime");
+  if (elTokensTotal) elTokensTotal.textContent = tokensTotal.toLocaleString();
+
+  const elAvgLat = document.getElementById("stat-avg-latency");
+  if (elAvgLat) elAvgLat.textContent = `${avgLat}ms`;
+
+  // 1. Bedrock Card
+  let bCalls = 0;
+  let bTokens = 0;
+  (data.summary.by_model || []).forEach(m => {
+    const prov = (m.provider || "").toLowerCase();
+    if (prov.includes("bedrock")) {
+      bCalls += (m.calls_today || 0);
+      bTokens += (m.tokens_today || 0);
+    }
+  });
+  const elBUsed = document.getElementById("label-bedrock-used");
+  if (elBUsed) elBUsed.textContent = bTokens.toLocaleString();
+  const elBCalls = document.getElementById("bedrock-today-calls");
+  if (elBCalls) elBCalls.textContent = bCalls;
+
+  // 2. Groq Card
+  const groq = limits.groq || {};
+  const gModel = document.getElementById("label-groq-model");
+  if (gModel) gModel.textContent = groq.model || "qwen/qwen3.8-27b";
+
+  const gUsed = document.getElementById("label-groq-used");
+  if (gUsed) gUsed.textContent = (groq.used_today || 0).toLocaleString();
+
+  const gRem = document.getElementById("label-groq-remaining");
+  if (gRem) gRem.textContent = (groq.remaining_today || 0).toLocaleString();
+
+  const gPct = document.getElementById("label-groq-percent");
+  if (gPct) gPct.textContent = `${groq.percent_used || 0}%`;
+
+  const gFill = document.getElementById("bar-groq-fill");
+  if (gFill) {
+    gFill.style.width = `${Math.min(100, groq.percent_used || 0)}%`;
+    if (groq.percent_used > 85) gFill.className = "token-progress-fill fill-danger";
+    else if (groq.percent_used > 60) gFill.className = "token-progress-fill fill-warn";
+    else gFill.className = "token-progress-fill";
+  }
+
+  // 3. Gemini Card
+  const gem = limits.gemini || {};
+  const gmModel = document.getElementById("label-gemini-model");
+  if (gmModel) gmModel.textContent = gem.model || "gemini-3.6-flash";
+
+  const gmUsed = document.getElementById("label-gemini-used");
+  if (gmUsed) gmUsed.textContent = (gem.used_today || 0).toLocaleString();
+
+  const gmRem = document.getElementById("label-gemini-remaining");
+  if (gmRem) gmRem.textContent = (gem.remaining_today || 0).toLocaleString();
+
+  const gmPct = document.getElementById("label-gemini-percent");
+  if (gmPct) gmPct.textContent = `${gem.percent_used || 0}%`;
+
+  const gmFill = document.getElementById("bar-gemini-fill");
+  if (gmFill) {
+    gmFill.style.width = `${Math.min(100, gem.percent_used || 0)}%`;
+    if (gem.percent_used > 85) gmFill.className = "token-progress-fill fill-danger";
+    else if (gem.percent_used > 60) gmFill.className = "token-progress-fill fill-warn";
+    else gmFill.className = "token-progress-fill";
+  }
+
+  // Count calls per model from summary.by_model
+  let gCalls = 0;
+  let gmCalls = 0;
+  (data.summary.by_model || []).forEach(m => {
+    const prov = (m.provider || "").toLowerCase();
+    if (prov.includes("groq")) gCalls += (m.calls_today || 0);
+    if (prov.includes("gemini")) gmCalls += (m.calls_today || 0);
+  });
+  const elGCalls = document.getElementById("groq-today-calls");
+  if (elGCalls) elGCalls.textContent = gCalls;
+  const elGmCalls = document.getElementById("gemini-today-calls");
+  if (elGmCalls) elGmCalls.textContent = gmCalls;
+
+  // 4. Invocations Table
+  const tbody = document.getElementById("token-table-body");
+  const recent = (data.summary.recent || []);
+  if (tbody) {
+    if (recent.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:20px; color:var(--text-muted);">No AI calls recorded yet. Click 'Diagnostic Ping' to test.</td></tr>`;
+    } else {
+      tbody.innerHTML = recent.map(r => {
+        let tagClass = "tag-success";
+        if (r.status === "fallback") tagClass = "tag-fallback";
+        const timeStr = (r.created_at || "").split(" ")[1] || r.created_at || "-";
+        const lat = r.latency_ms ? `${Math.round(r.latency_ms)}ms` : "-";
+        return `
+          <tr>
+            <td style="font-family:monospace; font-size:0.75rem; color:var(--text-muted);">${timeStr}</td>
+            <td><strong>${escapeHtml(r.provider || "")}</strong> <span style="font-size:0.7rem; color:var(--text-muted);">(${escapeHtml(r.model || "")})</span></td>
+            <td style="color:#a0aec0;">${(r.prompt_tokens || 0).toLocaleString()}</td>
+            <td style="color:#a0aec0;">${(r.completion_tokens || 0).toLocaleString()}</td>
+            <td><strong style="color:#00f2fe;">${(r.total_tokens || 0).toLocaleString()}</strong></td>
+            <td style="font-family:monospace; color:#cbd5e0;">${lat}</td>
+            <td><span class="${tagClass}">${escapeHtml(r.status || "ok")}</span></td>
+          </tr>
+        `;
+      }).join("");
+    }
+  }
+}
+
+async function testTokenPing() {
+  const btn = document.getElementById("btn-token-ping");
+  const alertEl = document.getElementById("token-ping-alert");
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = "&#9203; Pinging AI...";
+  }
+  if (alertEl) {
+    alertEl.style.display = "block";
+    alertEl.innerHTML = "Sending ping prompt to active LLM Cascade...";
+  }
+
+  try {
+    const res = await fetch("/api/tokens/test-ping", { method: "POST" });
+    const data = await res.json();
+    if (alertEl) {
+      alertEl.innerHTML = `<strong>${data.provider_used} response:</strong> "${escapeHtml(data.reply)}" (Tokens & latency logged below!)`;
+    }
+    await loadTokenData();
+  } catch (err) {
+    if (alertEl) alertEl.innerHTML = `<span style="color:#ff6b6b;">Ping failed: ${escapeHtml(String(err))}</span>`;
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = "&#128640; Diagnostic Ping";
+    }
+  }
+}
+
 </script>
 
     <!-- Timetable Interactive Viewer Modal -->
+    
+    <!-- AI Token Monitoring & Quota Usage Modal -->
+    <div id="modal-token-monitor" class="modal-backdrop hidden" onclick="if(event.target===this) closeTokenModal()">
+      <div class="token-monitor-modal-card">
+        <div class="token-modal-header">
+          <div>
+            <h3 style="margin:0; font-size:1.15rem; color:#fff; display:flex; align-items:center; gap:8px;">
+              &#9889; AI Model Token & Quota Usage Monitor
+            </h3>
+            <div id="token-modal-subtitle" style="font-size:0.75rem; color:var(--text-muted); margin-top:3px;">
+              Real-time token metering, daily free-tier allowances, and multi-model failover telemetry.
+            </div>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <button class="btn btn-sm btn-outline" onclick="testTokenPing()" id="btn-token-ping" title="Send a 1-sentence prompt to test live latency and tokens">
+              &#128640; Diagnostic Ping
+            </button>
+            <button class="btn btn-sm btn-outline" onclick="loadTokenData()" title="Refresh telemetry">
+              &#128260; Refresh
+            </button>
+            <button class="btn btn-sm btn-outline" onclick="closeTokenModal()" style="font-size:1.1rem; line-height:1; padding:4px 10px;">&times;</button>
+          </div>
+        </div>
+
+        <div class="token-modal-body">
+          <!-- Live Ping Output Bar if triggered -->
+          <div id="token-ping-alert" style="display:none; padding:10px 14px; border-radius:6px; background:rgba(0,242,254,0.1); border:1px solid rgba(0,242,254,0.3); font-size:0.8rem; color:#e2e8f0;">
+          </div>
+
+          <!-- Top 4 Summary Strip -->
+          <div class="token-summary-strip">
+            <div class="token-stat-box">
+              <span class="token-stat-title">Tokens Today</span>
+              <span class="token-stat-value" id="stat-tokens-today">0</span>
+              <span class="token-stat-subtitle" id="stat-prompt-comp-today">0 prompt / 0 completion</span>
+            </div>
+            <div class="token-stat-box">
+              <span class="token-stat-title">Requests Today</span>
+              <span class="token-stat-value" id="stat-requests-today">0</span>
+              <span class="token-stat-subtitle" id="stat-requests-total">Total: 0 calls</span>
+            </div>
+            <div class="token-stat-box">
+              <span class="token-stat-title">Tokens All-Time</span>
+              <span class="token-stat-value" id="stat-tokens-alltime">0</span>
+              <span class="token-stat-subtitle">Across all active models</span>
+            </div>
+            <div class="token-stat-box">
+              <span class="token-stat-title">Avg Latency</span>
+              <span class="token-stat-value" id="stat-avg-latency">0ms</span>
+              <span class="token-stat-subtitle">Fast cloud inference</span>
+            </div>
+          </div>
+
+          <!-- 3 Provider Allowance Cards -->
+          <div class="token-models-grid">
+            <!-- 1. Groq -->
+                        <!-- 0. AWS Bedrock (Priority 1) -->
+            <div class="token-model-card active-card" id="card-bedrock">
+              <div class="token-card-header">
+                <span class="token-model-name">
+                  &#9729;&#65039; AWS Bedrock
+                </span>
+                <span id="badge-bedrock-status" class="token-badge-active">Priority 1</span>
+              </div>
+              <div style="font-size:0.75rem; color:var(--text-muted);">
+                Model: <strong style="color:#e2e8f0;">Claude 3.5 / 4.5 Sonnet</strong>
+              </div>
+              <div class="token-bar-wrapper">
+                <div class="token-bar-label">
+                  <span>Usage & Quota</span>
+                  <span style="color:#00f2fe; font-weight:600;">Active Primary</span>
+                </div>
+                <div class="token-progress-track">
+                  <div class="token-progress-fill" style="width: 100%; background: linear-gradient(90deg, #00f2fe, #4facfe);"></div>
+                </div>
+                <div class="token-bar-label" style="margin-top:2px;">
+                  <span>Today's Tokens: <strong id="label-bedrock-used">0</strong></span>
+                  <span style="color:#00f2fe;">Primary Route</span>
+                </div>
+              </div>
+              <div class="token-metrics-row">
+                <div class="token-metric-item">
+                  <span class="token-metric-k">Priority</span>
+                  <span class="token-metric-v" style="color:#00f2fe;">#1 Active</span>
+                </div>
+                <div class="token-metric-item">
+                  <span class="token-metric-k">Today's Calls</span>
+                  <span class="token-metric-v" id="bedrock-today-calls">0</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="token-model-card" id="card-groq">
+              <div class="token-card-header">
+                <span class="token-model-name">
+                  &#9889; Groq Cloud
+                </span>
+                <span id="badge-groq-status" class="token-badge-standby">Priority 2 (Fallback)</span>
+              </div>
+              <div style="font-size:0.75rem; color:var(--text-muted);">
+                Model: <strong style="color:#e2e8f0;" id="label-groq-model">qwen/qwen3.8-27b</strong>
+              </div>
+              <div class="token-bar-wrapper">
+                <div class="token-bar-label">
+                  <span>Daily Free Quota (500k)</span>
+                  <span id="label-groq-percent">0%</span>
+                </div>
+                <div class="token-progress-track">
+                  <div id="bar-groq-fill" class="token-progress-fill" style="width: 0%;"></div>
+                </div>
+                <div class="token-bar-label" style="margin-top:2px;">
+                  <span>Used: <strong id="label-groq-used">0</strong></span>
+                  <span style="color:#48bb78;">Remaining: <strong id="label-groq-remaining">500,000</strong></span>
+                </div>
+              </div>
+              <div class="token-metrics-row">
+                <div class="token-metric-item">
+                  <span class="token-metric-k">Speed</span>
+                  <span class="token-metric-v">~300 tok/s</span>
+                </div>
+                <div class="token-metric-item">
+                  <span class="token-metric-k">Today's Calls</span>
+                  <span class="token-metric-v" id="groq-today-calls">0</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 2. Google Gemini -->
+            <div class="token-model-card" id="card-gemini">
+              <div class="token-card-header">
+                <span class="token-model-name">
+                  &#127775; Google Gemini
+                </span>
+                <span id="badge-gemini-status" class="token-badge-standby">Priority 3 (Fallback)</span>
+              </div>
+              <div style="font-size:0.75rem; color:var(--text-muted);">
+                Model: <strong style="color:#e2e8f0;" id="label-gemini-model">gemini-3.6-flash</strong>
+              </div>
+              <div class="token-bar-wrapper">
+                <div class="token-bar-label">
+                  <span>Daily Free Quota (1M)</span>
+                  <span id="label-gemini-percent">0%</span>
+                </div>
+                <div class="token-progress-track">
+                  <div id="bar-gemini-fill" class="token-progress-fill" style="width: 0%;"></div>
+                </div>
+                <div class="token-bar-label" style="margin-top:2px;">
+                  <span>Used: <strong id="label-gemini-used">0</strong></span>
+                  <span style="color:#48bb78;">Remaining: <strong id="label-gemini-remaining">1,000,000</strong></span>
+                </div>
+              </div>
+              <div class="token-metrics-row">
+                <div class="token-metric-item">
+                  <span class="token-metric-k">Context Window</span>
+                  <span class="token-metric-v">1,000,000 tok</span>
+                </div>
+                <div class="token-metric-item">
+                  <span class="token-metric-k">Today's Calls</span>
+                  <span class="token-metric-v" id="gemini-today-calls">0</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 3. Local Engine & Bedrock -->
+            <div class="token-model-card" id="card-local">
+              <div class="token-card-header">
+                <span class="token-model-name">
+                  &#128187; Local Specialist
+                </span>
+                <span class="token-badge-standby" style="color:#63b3ed; border-color:rgba(99,179,237,0.3);">Failsafe</span>
+              </div>
+              <div style="font-size:0.75rem; color:var(--text-muted);">
+                Engine: <strong style="color:#e2e8f0;">SQLite & Rule Subagents</strong>
+              </div>
+              <div class="token-bar-wrapper">
+                <div class="token-bar-label">
+                  <span>Quota Allowance</span>
+                  <span style="color:#48bb78; font-weight:600;">Unlimited</span>
+                </div>
+                <div class="token-progress-track">
+                  <div class="token-progress-fill" style="width: 100%; background:rgba(72,187,120,0.4);"></div>
+                </div>
+                <div class="token-bar-label" style="margin-top:2px;">
+                  <span>Used: <strong>0 API Cost</strong></span>
+                  <span style="color:#48bb78;">Always Available</span>
+                </div>
+              </div>
+              <div class="token-metrics-row">
+                <div class="token-metric-item">
+                  <span class="token-metric-k">Latency</span>
+                  <span class="token-metric-v">&lt; 10ms</span>
+                </div>
+                <div class="token-metric-item">
+                  <span class="token-metric-k">Offline Ready</span>
+                  <span class="token-metric-v">Yes</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Invocations Table Header -->
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
+            <h4 style="margin:0; font-size:0.92rem; color:#fff; display:flex; align-items:center; gap:6px;">
+              &#128221; Recent AI Invocations & Telemetry
+            </h4>
+            <span style="font-size:0.72rem; color:var(--text-muted);">Logged automatically on every chat & document parse</span>
+          </div>
+
+          <!-- Invocations Table -->
+          <div class="token-table-wrapper">
+            <table class="token-table">
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Provider / Model</th>
+                  <th>Prompt</th>
+                  <th>Output</th>
+                  <th>Total</th>
+                  <th>Latency</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="token-table-body">
+                <tr>
+                  <td colspan="7" style="text-align:center; padding:20px; color:var(--text-muted);">
+                    No AI invocations recorded yet today. Click 'Diagnostic Ping' or send a chat to see live tokens.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div id="modal-timetable-viewer" class="modal-backdrop hidden" onclick="if(event.target===this) closeTimetableViewer()">
       <div class="modal-card timetable-modal-card">
         <div class="tt-modal-header">

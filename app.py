@@ -13,6 +13,7 @@ from core.config import (
 )
 import core.database as db
 from services.aws_bedrock import bedrock_client
+from services.llm_provider import llm_provider
 from services.ntulearn import ntulearn_service
 from services.planner import generate_day_schedule, extract_tasks_from_announcements
 from services.agents import execute_chat_query
@@ -57,6 +58,7 @@ def index():
 
 @app.get("/api/status")
 def get_status(term: str = Query("26S1")):
+    llm_info = llm_provider.get_status()
     bedrock_info = bedrock_client.get_account_identity()
     ntulearn_auth = ntulearn_service.is_authenticated()
     courses = db.get_all_courses(term=term)
@@ -71,6 +73,7 @@ def get_status(term: str = Query("26S1")):
         "version": APP_VERSION,
         "active_term": term,
         "available_terms": available_terms,
+        "llm": llm_info,
         "bedrock": bedrock_info,
         "ntulearn_authenticated": ntulearn_auth,
         "course_count": len(courses),
@@ -322,3 +325,85 @@ def get_timetable_file(term: str = Query("26S1")):
 if __name__ == "__main__":
     print(f"Starting {APP_NAME} on http://{HOST}:{PORT}")
     uvicorn.run("app:app", host=HOST, port=PORT, reload=False)
+
+
+@app.get("/api/tokens/usage")
+def get_tokens_usage():
+    summary = db.get_token_usage_summary()
+    llm_status = llm_provider.get_status()
+    
+    GROQ_DAILY_LIMIT = int(os.getenv("GROQ_DAILY_TOKEN_LIMIT", 500000))
+    GEMINI_DAILY_LIMIT = int(os.getenv("GEMINI_DAILY_TOKEN_LIMIT", 1000000))
+    
+    groq_used_today = 0
+    gemini_used_today = 0
+    for m in summary.get("by_model", []):
+        prov = m.get("provider", "").lower()
+        if "groq" in prov:
+            groq_used_today += m.get("tokens_today", 0)
+        elif "gemini" in prov:
+            gemini_used_today += m.get("tokens_today", 0)
+            
+    groq_remaining = max(0, GROQ_DAILY_LIMIT - groq_used_today)
+    gemini_remaining = max(0, GEMINI_DAILY_LIMIT - gemini_used_today)
+    
+    return {
+        "status": "ok",
+        "llm_status": llm_status,
+        "summary": summary,
+        "limits": {
+            "bedrock": {
+                "name": "AWS Bedrock",
+                "model": "us.anthropic.claude-sonnet-4-5",
+                "daily_limit": "AWS Enterprise / Pay-As-You-Go",
+                "used_today": sum([m.get("tokens_today", 0) for m in summary.get("by_model", []) if "bedrock" in (m.get("provider") or "").lower()]),
+                "remaining_today": "High Capacity",
+                "percent_used": 0,
+                "is_active": bedrock_client.is_ready()
+            },
+            "groq": {
+                "name": "Groq Cloud",
+                "model": os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b"),
+                "daily_limit": GROQ_DAILY_LIMIT,
+                "used_today": groq_used_today,
+                "remaining_today": groq_remaining,
+                "percent_used": round((groq_used_today / GROQ_DAILY_LIMIT) * 100, 2) if GROQ_DAILY_LIMIT else 0,
+                "is_active": llm_status.get("groq_active", False)
+            },
+            "gemini": {
+                "name": "Google Gemini",
+                "model": os.getenv("GEMINI_MODEL", "gemini-3.6-flash"),
+                "daily_limit": GEMINI_DAILY_LIMIT,
+                "used_today": gemini_used_today,
+                "remaining_today": gemini_remaining,
+                "percent_used": round((gemini_used_today / GEMINI_DAILY_LIMIT) * 100, 2) if GEMINI_DAILY_LIMIT else 0,
+                "is_active": llm_status.get("gemini_active", False)
+            },
+            "local": {
+                "name": "Specialist Local Engine",
+                "model": "Rule & SQLite Subagents",
+                "daily_limit": "Unlimited",
+                "used_today": 0,
+                "remaining_today": "Unlimited",
+                "percent_used": 0,
+                "is_active": True
+            }
+        }
+    }
+
+@app.post("/api/tokens/test-ping")
+def test_token_ping():
+    """Executes a 1-sentence live diagnostic test ping to verify tokens and latency."""
+    msg = [{"role": "user", "content": "Ping test from CogniFlow token monitor. Respond with 'PONG' and your model name in under 6 words."}]
+    res_msg, provider = llm_provider.chat_completion(msg, max_tokens=25, temperature=0.1)
+    reply = res_msg.content if res_msg and hasattr(res_msg, "content") else "No response"
+    return {
+        "status": "ok",
+        "provider_used": provider,
+        "reply": reply
+    }
+
+@app.post("/api/tokens/reset")
+def reset_tokens():
+    db.clear_token_usage()
+    return {"status": "ok", "message": "Token usage history cleared"}

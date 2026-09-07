@@ -3,6 +3,7 @@ import re
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 from services.aws_bedrock import bedrock_client
+from services.llm_provider import llm_provider
 from core.config import LEAD_MODEL_ID, SPECIALIST_MODEL_ID
 import core.database as db
 from services.planner import generate_day_schedule
@@ -103,6 +104,21 @@ TOOL_DEFINITIONS = [
         }
     }
 ]
+
+# Convert Bedrock toolSpec format to standard OpenAI/Groq/Gemini tool format
+OPENAI_TOOL_DEFINITIONS = []
+for t in TOOL_DEFINITIONS:
+    if "toolSpec" in t:
+        spec = t["toolSpec"]
+        OPENAI_TOOL_DEFINITIONS.append({
+            "type": "function",
+            "function": {
+                "name": spec["name"],
+                "description": spec["description"],
+                "parameters": spec.get("inputSchema", {}).get("json", {})
+            }
+        })
+
 
 def extract_course_from_query(query: str, history: List[Dict[str, Any]], courses: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     """Detects target course from query, subject keywords, or multi-turn history."""
@@ -370,14 +386,13 @@ Student Question: {user_query}"""
     delegation_steps = []
     final_reply = ""
 
-    # Bedrock Converse loop with Tool Calling
+    # 1. PRIORITY 1: AWS Bedrock Claude 3.5 Sonnet
+    provider_name_used = "Offline Hybrid Engine"
     if bedrock_client.is_ready():
         try:
             tool_config = {"tools": TOOL_DEFINITIONS}
-            max_turns = 3
             turn = 0
-
-            while turn < max_turns:
+            while turn < 3:
                 turn += 1
                 resp = bedrock_client._client.converse(
                     modelId=LEAD_MODEL_ID,
@@ -386,51 +401,125 @@ Student Question: {user_query}"""
                     toolConfig=tool_config,
                     inferenceConfig={"maxTokens": 1000, "temperature": 0.2}
                 )
-
                 output_msg = resp.get("output", {}).get("message", {})
                 messages.append(output_msg)
-
                 stop_reason = resp.get("stopReason")
                 content_blocks = output_msg.get("content", [])
 
                 if stop_reason == "tool_use":
                     tool_result_contents = []
-
                     for block in content_blocks:
                         if "toolUse" in block:
                             t_use = block["toolUse"]
-                            t_id = t_use["toolUseId"]
-                            t_name = t_use["name"]
-                            t_input = t_use.get("input", {})
-
-                            subagent_out = execute_subagent_tool(t_name, t_input, term=term)
+                            subagent_out = execute_subagent_tool(t_use["name"], t_use.get("input", {}), term=term)
                             delegation_steps.append({
-                                "agent": subagent_out.get("subagent", t_name),
-                                "action": f"Delegated to {t_name}",
-                                "input": t_input,
+                                "agent": subagent_out.get("subagent", t_use["name"]),
+                                "action": f"Delegated to {t_use['name']}",
+                                "input": t_use.get("input", {}),
                                 "result_summary": subagent_out.get("finding") or str(subagent_out)[:140]
                             })
-
                             tool_result_contents.append({
                                 "toolResult": {
-                                    "toolUseId": t_id,
+                                    "toolUseId": t_use["toolUseId"],
                                     "content": [{"json": subagent_out}],
                                     "status": "success"
                                 }
                             })
-
-                    messages.append({
-                        "role": "user",
-                        "content": tool_result_contents
-                    })
+                    messages.append({"role": "user", "content": tool_result_contents})
                 else:
                     for block in content_blocks:
                         if "text" in block:
                             final_reply += block["text"]
+                    provider_name_used = "AWS Bedrock (Claude 3.5)"
+                    
+                    usage = resp.get("usage", {})
+                    pt = usage.get("inputTokens", 0)
+                    ct = usage.get("outputTokens", 0)
+                    tt = usage.get("totalTokens", pt + ct)
+                    lat = resp.get("metrics", {}).get("latencyMs", 1000)
+                    try:
+                        db.record_token_usage("AWS Bedrock", LEAD_MODEL_ID, pt, ct, tt, lat, "success", "chat")
+                    except Exception:
+                        pass
+                    break
+        except Exception as e:
+            print(f"[Agents] Bedrock priority notice ({e}). Auto-falling back to Groq...")
+            final_reply = ""
+
+    # 2. PRIORITY 2 & 3: Groq Cloud with Google Gemini Fallback
+    if not final_reply and llm_provider.is_ready():
+        try:
+            openai_msgs = []
+            for h in history[-4:]:
+                r = h.get("role", "user")
+                t = re.sub(r'<div class="subagent-[^"]*">.*?</div>', '', h.get("content", ""), flags=re.DOTALL)
+                t = re.sub(r'<[^>]+>', '', t).strip()
+                if t:
+                    openai_msgs.append({"role": r, "content": t})
+            openai_msgs.append({"role": "user", "content": current_context})
+
+            max_turns = 3
+            turn = 0
+            while turn < max_turns:
+                turn += 1
+                tools_to_use = None if (delegation_steps and turn >= 2) else OPENAI_TOOL_DEFINITIONS
+                res_msg, provider = llm_provider.chat_completion(
+                    messages=openai_msgs,
+                    tools=tools_to_use,
+                    system_prompt=LEAD_SYSTEM_PROMPT,
+                    temperature=0.2,
+                    max_tokens=1000
+                )
+                provider_name_used = provider
+
+                if not res_msg:
+                    break
+
+                tool_calls = getattr(res_msg, "tool_calls", None)
+                if tool_calls and len(tool_calls) > 0:
+                    openai_msgs.append({
+                        "role": "assistant",
+                        "content": res_msg.content or "",
+                        "tool_calls": [
+                            {
+                                "id": tc.id,
+                                "type": "function",
+                                "function": {
+                                    "name": tc.function.name,
+                                    "arguments": tc.function.arguments
+                                }
+                            } for tc in tool_calls
+                        ]
+                    })
+
+                    for tc in tool_calls:
+                        t_name = tc.function.name
+                        try:
+                            t_input = json.loads(tc.function.arguments) if isinstance(tc.function.arguments, str) else tc.function.arguments
+                        except Exception:
+                            t_input = {}
+
+                        subagent_out = execute_subagent_tool(t_name, t_input, term=term)
+                        delegation_steps.append({
+                            "agent": subagent_out.get("subagent", t_name),
+                            "action": f"Delegated to {t_name}",
+                            "input": t_input,
+                            "result_summary": subagent_out.get("finding") or str(subagent_out)[:140]
+                        })
+
+                        openai_msgs.append({
+                            "role": "tool",
+                            "tool_call_id": tc.id,
+                            "content": json.dumps(subagent_out)
+                        })
+                else:
+                    if res_msg.content:
+                        final_reply = res_msg.content
                     break
 
         except Exception as e:
-            final_reply = f"Bedrock tool execution error: {e}"
+            print(f"[Agents] Error during Groq/Gemini execution ({e}), falling back to local specialist...")
+            final_reply = ""
 
     # If offline, expired credentials, or fallback required
     if not final_reply or "Bedrock tool execution error" in final_reply:
@@ -565,6 +654,6 @@ Student Question: {user_query}"""
         "reply": composed_reply,
         "agent": "Lead Orchestrator",
         "delegation_steps": delegation_steps,
-        "model": LEAD_MODEL_ID,
+        "model": provider_name_used,
         "term": term,
     }

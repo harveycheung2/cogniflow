@@ -7,6 +7,7 @@ import pypdf
 
 from core.config import SPECIALIST_MODEL_ID, LEAD_MODEL_ID
 from services.aws_bedrock import bedrock_client
+from services.llm_provider import llm_provider
 from services.ntulearn import ntulearn_service
 import core.database as db
 
@@ -193,10 +194,10 @@ class DocumentAgent:
         if heuristic_schedules:
             extracted_schedule.extend(heuristic_schedules)
 
-        # Bedrock Specialist Reading into Document
-        bedrock_success = False
-        if bedrock_client.is_ready() and len(raw_text) > 40:
-            prompt = f"""You are the AWS Bedrock Document Specialist. Read this course material from {course_code} ({title}):
+        # AI Specialist Reading into Document (Groq Primary with Gemini Fallback)
+        ai_success = False
+        if (llm_provider.is_ready() or bedrock_client.is_ready()) and len(raw_text) > 40:
+            prompt = f"""You are the Academic Document Specialist. Read this course material from {course_code} ({title}):
 
 === EXTRACTED DOCUMENT TEXT ===
 {raw_excerpt[:3500]}
@@ -221,31 +222,44 @@ Analyze the actual contents and return ONLY valid JSON:
   ]
 }}"""
             try:
-                ai_resp = bedrock_client.converse(
-                    messages=[{"role": "user", "content": prompt}],
-                    system_prompt="You are an academic materials intelligence reader. Output strictly valid JSON without markdown wrapping.",
-                    model_id=self.specialist_model,
-                    max_tokens=700,
-                    temperature=0.1
-                )
-                clean_json = re.sub(r'^```json\s*', '', ai_resp.strip())
-                clean_json = re.sub(r'\s*```$', '', clean_json).strip()
-                data = json.loads(clean_json)
+                ai_resp = None
+                if llm_provider.is_ready():
+                    ai_resp, provider = llm_provider.analyze_document(
+                        prompt=prompt,
+                        system_prompt="You are an academic materials intelligence reader. Output strictly valid JSON without markdown wrapping.",
+                        max_tokens=750,
+                        temperature=0.1
+                    )
 
-                doc_type = data.get("doc_type", doc_type)
-                is_solution = data.get("is_solution", is_solution)
-                week_number = data.get("week_number", 0)
-                topic = data.get("topic", "")
-                summary = data.get("summary", "")
-                if data.get("key_questions"):
-                    questions_found = data.get("key_questions")
-                for s in data.get("schedule_items", []):
-                    s["source_doc_id"] = mat_id
-                    s["source_doc_title"] = title
-                    extracted_schedule.append(s)
-                bedrock_success = True
-            except Exception:
-                bedrock_success = False
+                if not ai_resp and bedrock_client.is_ready():
+                    ai_resp = bedrock_client.converse(
+                        messages=[{"role": "user", "content": prompt}],
+                        system_prompt="You are an academic materials intelligence reader. Output strictly valid JSON without markdown wrapping.",
+                        model_id=self.specialist_model,
+                        max_tokens=700,
+                        temperature=0.1
+                    )
+
+                if ai_resp:
+                    clean_json = re.sub(r'^```(?:json)?\s*', '', ai_resp.strip(), flags=re.IGNORECASE)
+                    clean_json = re.sub(r'\s*```$', '', clean_json).strip()
+                    data = json.loads(clean_json)
+
+                    doc_type = data.get("doc_type", doc_type)
+                    is_solution = data.get("is_solution", is_solution)
+                    week_number = data.get("week_number", 0)
+                    topic = data.get("topic", "")
+                    summary = data.get("summary", "")
+                    if data.get("key_questions"):
+                        questions_found = data.get("key_questions")
+                    for s in data.get("schedule_items", []):
+                        s["source_doc_id"] = mat_id
+                        s["source_doc_title"] = title
+                        extracted_schedule.append(s)
+                    ai_success = True
+            except Exception as e:
+                print(f"[DocumentAgent] Document parsing exception: {e}")
+                ai_success = False
 
         if not summary:
             if is_solution:
@@ -304,7 +318,7 @@ Analyze the actual contents and return ONLY valid JSON:
             "summary": summary,
             "questions_count": len(questions_found),
             "schedule_count": len(extracted_schedule),
-            "bedrock_used": bedrock_success,
+            "bedrock_used": ai_success, "ai_parsed": ai_success,
         }
 
     def analyze_all_downloaded_documents(self, course_code: Optional[str] = None) -> Dict[str, Any]:

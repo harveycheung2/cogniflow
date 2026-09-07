@@ -76,6 +76,25 @@ def init_db():
         """)
 
         cursor.execute("""
+        CREATE TABLE IF NOT EXISTS token_usage (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            provider TEXT NOT NULL,
+            model TEXT NOT NULL,
+            prompt_tokens INTEGER DEFAULT 0,
+            completion_tokens INTEGER DEFAULT 0,
+            total_tokens INTEGER DEFAULT 0,
+            latency_ms REAL DEFAULT 0.0,
+            status TEXT DEFAULT 'success',
+            endpoint TEXT DEFAULT 'chat',
+            error_message TEXT DEFAULT '',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """)
+
+        cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_token_usage_created ON token_usage(created_at)
+        """)
+        cursor.execute("""
         CREATE TABLE IF NOT EXISTS chat_messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             session_id TEXT DEFAULT 'default',
@@ -516,4 +535,90 @@ def get_active_timetable(term: str = "26S1") -> Optional[Dict[str, Any]]:
 def delete_active_timetable(term: str = "26S1"):
     with get_connection() as conn:
         conn.execute("DELETE FROM timetable_documents WHERE term = ? OR id = 'active_timetable'", (term,))
+        conn.commit()
+
+
+def record_token_usage(
+    provider: str,
+    model: str,
+    prompt_tokens: int = 0,
+    completion_tokens: int = 0,
+    total_tokens: int = 0,
+    latency_ms: float = 0.0,
+    status: str = "success",
+    endpoint: str = "chat",
+    error_message: str = "",
+):
+    try:
+        with get_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO token_usage 
+                (provider, model, prompt_tokens, completion_tokens, total_tokens, latency_ms, status, endpoint, error_message)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (provider, model, prompt_tokens, completion_tokens, total_tokens, latency_ms, status, endpoint, error_message)
+            )
+            conn.commit()
+    except Exception as e:
+        print(f"[DB] Error recording token usage: {e}")
+
+def get_token_usage_summary() -> Dict[str, Any]:
+    with get_connection() as conn:
+        today_clause = "date(created_at, 'localtime') = date('now', 'localtime')"
+        
+        overall = conn.execute("""
+            SELECT 
+                COUNT(*) as total_requests,
+                COALESCE(SUM(prompt_tokens), 0) as total_prompt_tokens,
+                COALESCE(SUM(completion_tokens), 0) as total_completion_tokens,
+                COALESCE(SUM(total_tokens), 0) as total_tokens,
+                COALESCE(AVG(CASE WHEN latency_ms > 0 THEN latency_ms END), 0) as avg_latency
+            FROM token_usage
+        """).fetchone()
+        
+        today = conn.execute(f"""
+            SELECT 
+                COUNT(*) as requests_today,
+                COALESCE(SUM(prompt_tokens), 0) as prompt_tokens_today,
+                COALESCE(SUM(completion_tokens), 0) as completion_tokens_today,
+                COALESCE(SUM(total_tokens), 0) as tokens_today,
+                COALESCE(AVG(CASE WHEN latency_ms > 0 THEN latency_ms END), 0) as avg_latency_today
+            FROM token_usage
+            WHERE {today_clause}
+        """).fetchone()
+        
+        models_rows = conn.execute(f"""
+            SELECT 
+                provider,
+                model,
+                COUNT(*) as total_calls,
+                SUM(CASE WHEN {today_clause} THEN 1 ELSE 0 END) as calls_today,
+                COALESCE(SUM(total_tokens), 0) as total_tokens,
+                COALESCE(SUM(CASE WHEN {today_clause} THEN total_tokens ELSE 0 END), 0) as tokens_today,
+                COALESCE(SUM(CASE WHEN {today_clause} THEN prompt_tokens ELSE 0 END), 0) as prompt_tokens_today,
+                COALESCE(SUM(CASE WHEN {today_clause} THEN completion_tokens ELSE 0 END), 0) as completion_tokens_today,
+                COALESCE(AVG(CASE WHEN latency_ms > 0 THEN latency_ms END), 0) as avg_latency
+            FROM token_usage
+            GROUP BY provider, model
+            ORDER BY calls_today DESC, total_calls DESC
+        """).fetchall()
+        
+        recent_rows = conn.execute("""
+            SELECT id, provider, model, prompt_tokens, completion_tokens, total_tokens, latency_ms, status, endpoint, created_at
+            FROM token_usage
+            ORDER BY id DESC
+            LIMIT 35
+        """).fetchall()
+        
+        return {
+            "overall": dict(overall) if overall else {},
+            "today": dict(today) if today else {},
+            "by_model": [dict(r) for r in models_rows],
+            "recent": [dict(r) for r in recent_rows]
+        }
+
+def clear_token_usage():
+    with get_connection() as conn:
+        conn.execute("DELETE FROM token_usage")
         conn.commit()
