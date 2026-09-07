@@ -4,9 +4,6 @@ from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 ENV_FILE = BASE_DIR / ".env"
-PARENT_ENV = BASE_DIR.parent / "agentic_system" / ".env"
-if PARENT_ENV.exists():
-    load_dotenv(PARENT_ENV, override=False)
 if ENV_FILE.exists():
     load_dotenv(ENV_FILE, override=True)
 
@@ -25,9 +22,8 @@ DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = DATA_DIR / "workday_os.db"
 DOWNLOADS_DIR = BASE_DIR / "downloads"
+DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
 AUTH_FILE = BASE_DIR / "auth.json"
-if not AUTH_FILE.exists() and (BASE_DIR.parent / "agentic_system" / "ntulearn_session.json").exists():
-    AUTH_FILE = BASE_DIR.parent / "agentic_system" / "ntulearn_session.json"
 
 # AWS / Bedrock Config
 AWS_REGION = os.getenv("AWS_REGION", os.getenv("AWS_DEFAULT_REGION", "us-east-1"))
@@ -36,7 +32,7 @@ AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "")
 AWS_SESSION_TOKEN = os.getenv("AWS_SESSION_TOKEN", "")
 
 LEAD_MODEL_ID = os.getenv("LEAD_MODEL_ID", "us.anthropic.claude-sonnet-4-5-20250929-v1:0")
-SPECIALIST_MODEL_ID = os.getenv("OUTLOOK_MODEL_ID", "us.anthropic.claude-haiku-4-5-20251001-v1:0")
+SPECIALIST_MODEL_ID = os.getenv("SPECIALIST_MODEL_ID", "us.anthropic.claude-haiku-4-5-20251001-v1:0")
 
 # NTULearn Config
 NTULEARN_BASE_URL = os.getenv("NTULEARN_BASE_URL", "https://ntulearn.ntu.edu.sg").rstrip("/")
@@ -46,7 +42,7 @@ DEFAULT_USER_AGENT = (
 )
 
 # Freemium LLM Config (Groq Primary with Google Gemini Fallback)
-GROQ_API_KEY = os.getenv('GROQ_API_KEY', '')
-GROQ_MODEL = os.getenv('GROQ_MODEL', 'llama-3.3-70b-versatile')
-GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
-GEMINI_MODEL = os.getenv('GEMINI_MODEL', 'gemini-2.0-flash')
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")

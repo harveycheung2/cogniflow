@@ -6,7 +6,7 @@ from pathlib import Path
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
-BASE_DIR = Path(r"c:\Users\harve\agentic_ai_hackathon_2026\agentic_os_v2")
+BASE_DIR = Path(__file__).resolve().parent
 ENV_FILE = BASE_DIR / ".env"
 
 # Safe .env loader that doesn't strictly depend on python-dotenv
@@ -30,7 +30,7 @@ except ImportError:
     load_env_file(ENV_FILE)
 
 # Ensure virtualenv site-packages are added to sys.path if running under global python
-venv_site = Path(r"c:\Users\harve\agentic_ai_hackathon_2026\agentic_system\.venv\Lib\site-packages")
+venv_site = BASE_DIR / ".venv" / "Lib" / "site-packages"
 if venv_site.exists() and str(venv_site) not in sys.path:
     sys.path.insert(0, str(venv_site))
 
