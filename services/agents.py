@@ -34,7 +34,7 @@ Guidelines:
   Today is strictly **Monday, 07 September 2026** (e.g. 7 September 2026 is **Monday**, NOT Saturday). Never assume or state an incorrect day of the week. Calculate all deadlines, tutorial dates, and class schedules relative to today being Monday.
 - **Dedicated Spoken Voice Summary (MANDATORY)**:
   At the very end of your final response, append a dedicated voice summary block formatted EXACTLY as:
-  `[VOICE_SUMMARY: 1-2 complete, conversational spoken sentences (roughly 25-45 words). Never cut off abruptly; always finish your complete sentence with closing punctuation. Zero emojis, zero markdown, zero bullet points.]`
+  `[VOICE_SUMMARY: 3-4 complete, conversational spoken sentences (roughly 45-75 words). Provide a natural, thorough spoken summary. Never cut off abruptly; always finish your complete sentences with closing punctuation. Strictly zero emojis, zero markdown, zero bullet points.]`
   Example:
   [VOICE_SUMMARY: You have an MH2500 lecture at 9:30 AM and an SC2001 tutorial at 2:30 PM today.]
 - Professional, encouraging, and clear executive tone.
@@ -552,13 +552,16 @@ def extract_and_strip_voice_summary(reply_text: str) -> Tuple[str, str]:
     else:
         cleaned_reply = reply_text.strip()
     
-    # If the model did not generate [VOICE_SUMMARY: ...], extract a clean 1-2 sentence fallback
+    # If the model did not generate [VOICE_SUMMARY: ...], extract a clean 3-4 sentence prose fallback
     if not voice_summary or len(voice_summary) < 6:
         base = re.sub(r'<div class="subagent-[^"]*">.*?</div>', '', cleaned_reply, flags=re.DOTALL)
+        base = re.sub(r'#+ [^\r\n]+', ' ', base)
+        base = re.sub(r'^\s*\d+[\.\)] [^\r\n]+', ' ', base, flags=re.MULTILINE)
+        base = re.sub(r'[-–—]{2,}', ' ', base)
         clean = clean_voice_summary_text(base)
         sentences = re.split(r'(?<=[.!?])\s+', clean)
-        valid = [s.strip() for s in sentences if len(s.strip()) > 6 and not s.strip().startswith('---')]
-        voice_summary = ' '.join(valid[:2]).strip()
+        valid = [s.strip() for s in sentences if len(s.strip()) > 10 and not s.strip().startswith('---') and ':' not in s.strip()[:20]]
+        voice_summary = ' '.join(valid[:4]).strip()
         if voice_summary and voice_summary[-1] not in '.!?':
             voice_summary += '.'
         if not voice_summary:
@@ -619,7 +622,7 @@ Identified Course Target: {target_course_code} ({target_code} - {target_course_t
 Enrolled Modules: {courses_str}
 {tt_summary}
 Student Question: {user_query}
-CRITICAL INSTRUCTION: Today is {day_name}, {date_str} (07 September 2026 is strictly {day_name}). At the very end of your response, you MUST append [VOICE_SUMMARY: 1-2 spoken sentences answering the question with zero emojis and zero markdown]."""
+CRITICAL INSTRUCTION: Today is {day_name}, {date_str} (07 September 2026 is strictly {day_name}). At the very end of your response, you MUST append [VOICE_SUMMARY: 3-4 complete spoken sentences answering the question naturally with zero emojis and zero markdown]."""
 
     if messages and messages[-1]["role"] == "user":
         messages[-1]["content"][0]["text"] += f"\n\nTarget Module: {target_code}\nFollow-up Question: {user_query}"
@@ -642,7 +645,7 @@ CRITICAL INSTRUCTION: Today is {day_name}, {date_str} (07 September 2026 is stri
                     messages=messages,
                     system=[{"text": LEAD_SYSTEM_PROMPT}],
                     toolConfig=tool_config,
-                    inferenceConfig={"maxTokens": 1000, "temperature": 0.2}
+                    inferenceConfig={"maxTokens": 2048, "temperature": 0.2}
                 )
                 output_msg = resp.get("output", {}).get("message", {})
                 messages.append(output_msg)
@@ -711,7 +714,7 @@ CRITICAL INSTRUCTION: Today is {day_name}, {date_str} (07 September 2026 is stri
                     tools=tools_to_use,
                     system_prompt=LEAD_SYSTEM_PROMPT,
                     temperature=0.2,
-                    max_tokens=1000
+                    max_tokens=2048
                 )
                 provider_name_used = provider
 
