@@ -1,7 +1,7 @@
 import json
 import re
 from datetime import datetime
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 from services.aws_bedrock import bedrock_client
 from services.llm_provider import llm_provider
 from core.config import LEAD_MODEL_ID, SPECIALIST_MODEL_ID
@@ -30,6 +30,13 @@ Guidelines:
   - 📄 **Exact Tutorial / Test / Syllabus PDFs Required & Action Links**
   - 📅 **Semester Schedule & Milestones**
   - 💡 **Recommended Next Step**
+- **Temporal Precision & Day of Week**:
+  Today is strictly **Monday, 07 September 2026** (e.g. 7 September 2026 is **Monday**, NOT Saturday). Never assume or state an incorrect day of the week. Calculate all deadlines, tutorial dates, and class schedules relative to today being Monday.
+- **Dedicated Spoken Voice Summary (MANDATORY)**:
+  At the very end of your final response, append a dedicated voice summary block formatted EXACTLY as:
+  `[VOICE_SUMMARY: 1-2 concise, conversational spoken sentences answering the question directly. Strictly ZERO emojis, ZERO markdown, ZERO bullet points, ZERO document tokens. Written in plain spoken English for text-to-speech.]`
+  Example:
+  [VOICE_SUMMARY: You have an MH2500 lecture at 9:30 AM and an SC2001 tutorial at 2:30 PM today.]
 - Professional, encouraging, and clear executive tone.
 """
 
@@ -504,14 +511,18 @@ def build_course_dossier_hub(courses: List[Dict[str, Any]], target_course: Optio
 '''
 
 
-def extract_speech_summary(text: str, max_sentences: int = 2) -> str:
-    """Extract a short, punchy 1-2 sentence spoken summary stripped of all emojis and markdown."""
+def clean_voice_summary_text(text: str) -> str:
+    """Clean text for text-to-speech by stripping HTML, markdown, URLs, and all emojis."""
     if not text:
         return ""
     clean = re.sub(r'<[^>]+>', ' ', text)
     clean = re.sub(r'\[OPEN_DOC:[^\]]+\]', ' ', clean)
+    clean = re.sub(r'\[VOICE_SUMMARY:\s*', ' ', clean, flags=re.IGNORECASE)
+    clean = re.sub(r'\]', ' ', clean)
     clean = re.sub(r'#+\s*', '', clean)
     clean = re.sub(r'[*_`~|]', '', clean)
+    clean = re.sub(r'^\s*[-•*]\s+', '', clean, flags=re.MULTILINE)
+    clean = re.sub(r'https?:\/\/\S+', '', clean)
     emoji_pattern = re.compile(
         r'[\U0001F1E0-\U0001F1FF\U0001F300-\U0001F5FF\U0001F600-\U0001F64F\U0001F680-\U0001F6FF'
         r'\U0001F700-\U0001F77F\U0001F780-\U0001F7FF\U0001F800-\U0001F8FF\U0001F900-\U0001F9FF'
@@ -522,13 +533,38 @@ def extract_speech_summary(text: str, max_sentences: int = 2) -> str:
     clean = re.sub(r'&#\d+;', '', clean)
     clean = re.sub(r'&[a-z]+;', '', clean)
     clean = re.sub(r'\s+', ' ', clean).strip()
-    sentences = re.split(r'(?<=[.!?])\s+', clean)
-    selected = [s.strip() for s in sentences if s.strip() and len(s.strip()) > 3]
-    summary = ' '.join(selected[:max_sentences])
-    if len(summary) > 200:
-        summary = summary[:197].rsplit(' ', 1)[0] + '...'
-    return summary or clean[:180]
+    return clean
 
+def extract_and_strip_voice_summary(reply_text: str) -> Tuple[str, str]:
+    """
+    Extracts the model-generated [VOICE_SUMMARY: ...] tag for text-to-speech,
+    and cleanly strips it from the visual markdown response.
+    """
+    if not reply_text:
+        return "", ""
+    
+    voice_summary = ""
+    pattern = re.compile(r'\[VOICE_SUMMARY:\s*(.*?)\]', flags=re.DOTALL | re.IGNORECASE)
+    match = pattern.search(reply_text)
+    if match:
+        voice_summary = clean_voice_summary_text(match.group(1))
+        cleaned_reply = pattern.sub('', reply_text).strip()
+    else:
+        cleaned_reply = reply_text.strip()
+    
+    # If the model did not generate [VOICE_SUMMARY: ...], extract a clean 1-2 sentence fallback
+    if not voice_summary or len(voice_summary) < 6:
+        base = re.sub(r'<div class="subagent-[^"]*">.*?</div>', '', cleaned_reply, flags=re.DOTALL)
+        clean = clean_voice_summary_text(base)
+        sentences = re.split(r'(?<=[.!?])\s+', clean)
+        valid = [s.strip() for s in sentences if len(s.strip()) > 6 and not s.strip().startswith('---')]
+        voice_summary = ' '.join(valid[:2])
+        if len(voice_summary) > 200:
+            voice_summary = voice_summary[:197].rsplit(' ', 1)[0] + '...'
+        if not voice_summary:
+            voice_summary = clean[:180]
+            
+    return cleaned_reply, voice_summary
 
 def execute_chat_query(user_query: str, term: str = "26S1", session_id: str = "default") -> Dict[str, Any]:
     courses = db.get_all_courses(term=term)
@@ -574,12 +610,16 @@ def execute_chat_query(user_query: str, term: str = "26S1", session_id: str = "d
         tt_summary = f"\nStudent Profile: {sname}\nOfficial Timetable Weekly Slots: {slots_text}\nOfficial Final Exam Dates: {exams_text}\n"
 
     # Current context grounding
-    current_context = f"""Current Date: {datetime.now().strftime('%d %B %Y')} (AY2026/27 Semester 1 - Week 4/5)
+    now_dt = datetime.now()
+    day_name = now_dt.strftime('%A')
+    date_str = now_dt.strftime('%d %B %Y')
+    current_context = f"""Current Date & Time: {day_name}, {date_str} (Today is strictly {day_name}, AY2026/27 Semester 1 - Week 4)
 Active Term: {term}
 Identified Course Target: {target_course_code} ({target_code} - {target_course_title})
 Enrolled Modules: {courses_str}
 {tt_summary}
-Student Question: {user_query}"""
+Student Question: {user_query}
+CRITICAL INSTRUCTION: Today is {day_name}, {date_str} (07 September 2026 is strictly {day_name}). At the very end of your response, you MUST append [VOICE_SUMMARY: 1-2 spoken sentences answering the question with zero emojis and zero markdown]."""
 
     if messages and messages[-1]["role"] == "user":
         messages[-1]["content"][0]["text"] += f"\n\nTarget Module: {target_code}\nFollow-up Question: {user_query}"
@@ -770,13 +810,13 @@ Student Question: {user_query}"""
 
     composed_reply = f"{delegation_callout}{final_reply}"
 
-    db.save_chat_message("user", user_query, agent_name="User", session_id=session_id)
-    db.save_chat_message("assistant", composed_reply, agent_name="Lead Orchestrator", session_id=session_id)
+    final_clean_reply, speech_sum = extract_and_strip_voice_summary(composed_reply)
 
-    speech_sum = extract_speech_summary(final_reply)
+    db.save_chat_message("user", user_query, agent_name="User", session_id=session_id)
+    db.save_chat_message("assistant", final_clean_reply, agent_name="Lead Orchestrator", session_id=session_id)
 
     return {
-        "reply": composed_reply,
+        "reply": final_clean_reply,
         "speech_summary": speech_sum,
         "agent": "Lead Orchestrator",
         "delegation_steps": delegation_steps,

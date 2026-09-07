@@ -2187,7 +2187,14 @@ function toggleAutoReadAloud() {
 
 function cleanTextForSpeech(raw) {
   if (!raw) return "";
-  let clean = raw.replace(/\[OPEN_DOC:[^\]]+\]/g, " ");
+  let clean = raw;
+  // If [VOICE_SUMMARY: ...] exists, extract and use ONLY the voice summary!
+  const vsMatch = clean.match(/\[VOICE_SUMMARY:\s*(.*?)\]/i);
+  if (vsMatch && vsMatch[1]) {
+    clean = vsMatch[1];
+  }
+  clean = clean.replace(/\[VOICE_SUMMARY:[^\]]*\]/gi, " ");
+  clean = clean.replace(/\[OPEN_DOC:[^\]]+\]/g, " ");
   clean = clean.replace(/<[^>]*>/g, " ");
   clean = clean.replace(/[#*_`~|]/g, " ");
   clean = clean.replace(/^\s*[-•*]\s+/gm, " ");
