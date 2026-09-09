@@ -728,11 +728,10 @@ body {
 }
 .chat-input-wrapper input {
   width: 100%;
-  padding-right: 70px;
   background: var(--bg-input);
   border: 1px solid var(--border-color);
   color: var(--text-main);
-  padding: 10px 14px;
+  padding: 10px 92px 10px 14px;
   border-radius: var(--radius-sm);
   font-size: 0.83rem;
   outline: none;
@@ -742,6 +741,51 @@ body {
 .chat-input-wrapper input:focus {
   border-color: var(--accent-cyan);
   box-shadow: 0 0 0 3px rgba(0, 242, 254, 0.22);
+}
+.chat-input-timer {
+  position: absolute;
+  right: 8px;
+  display: none;
+  align-items: center;
+  gap: 5px;
+  background: rgba(255, 69, 58, 0.18);
+  border: 1px solid rgba(255, 69, 58, 0.45);
+  color: #ff6b6b;
+  border-radius: var(--radius-pill);
+  padding: 3px 8px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  user-select: none;
+  z-index: 5;
+  transition: all 0.15s ease;
+}
+.chat-input-timer:hover {
+  background: rgba(255, 69, 58, 0.32);
+  transform: scale(1.02);
+}
+.chat-input-timer:active {
+  transform: scale(0.96);
+}
+.chat-input-timer .timer-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ff453a;
+  box-shadow: 0 0 6px #ff453a;
+  animation: timerDotPulse 0.9s infinite alternate;
+}
+.chat-input-timer .timer-cancel-icon {
+  font-size: 0.82rem;
+  margin-left: 2px;
+  opacity: 0.85;
+  font-weight: bold;
+}
+@keyframes timerDotPulse {
+  from { opacity: 0.4; transform: scale(0.85); }
+  to { opacity: 1; transform: scale(1.2); }
 }
 
 .btn-mic {
@@ -1932,9 +1976,10 @@ body {
           </button>
           <div class="chat-input-wrapper">
             <input type="text" id="chat-input" placeholder="Ask your Lead Agent (or click 🎙️ mic to speak)..." autocomplete="off" oninput="handleChatInputChange()" onkeydown="handleChatInputKeydown(event)" />
-            <div id="chat-input-timer" class="chat-input-timer" title="Auto-sending in 3s... (Type in box to edit)">
+            <div id="chat-input-timer" class="chat-input-timer" onclick="cancelVoiceCountdown(event)" title="Auto-sending... Click or type in text box to pause & edit">
               <span class="timer-dot"></span>
               <span id="chat-timer-text">3s</span>
+              <span class="timer-cancel-icon" title="Cancel auto-send and edit">&times;</span>
             </div>
           </div>
           <button type="submit" class="btn btn-primary" id="btn-send">Send</button>
@@ -2579,6 +2624,7 @@ let currentUtterance = null;
 let wasVoiceInput = false;
 let voiceCountdownTimer = null;
 let voiceCountdownSeconds = 3;
+let userEditedVoiceInput = false; // Flag: user focused, clicked, typed, or edited text
 
 function initSpeechRecognition() {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -2593,6 +2639,7 @@ function initSpeechRecognition() {
 
   recog.onstart = () => {
     isRecognizing = true;
+    userEditedVoiceInput = false; // Reset edit flag for new speech session
     clearVoiceCountdown();
     const micBtn = document.getElementById("btn-mic");
     if (micBtn) micBtn.classList.add("listening");
@@ -2601,8 +2648,11 @@ function initSpeechRecognition() {
   };
 
   recog.onresult = (event) => {
+    // If the user already started editing or clicking in the box, DO NOT overwrite their changes!
+    if (userEditedVoiceInput) return;
+
     let transcript = "";
-    for (let i = event.resultIndex; i < event.results.length; i++) {
+    for (let i = 0; i < event.results.length; i++) {
       transcript += event.results[i][0].transcript;
     }
     const input = document.getElementById("chat-input");
@@ -2634,9 +2684,12 @@ function toggleSpeechRecognition() {
   }
 
   if (isRecognizing) {
-    if (recognition) recognition.stop();
+    if (recognition) {
+      try { recognition.stop(); } catch(e){}
+    }
     stopSpeechRecognition(true);
   } else {
+    userEditedVoiceInput = false;
     clearVoiceCountdown();
     if (window.speechSynthesis) window.speechSynthesis.cancel();
     if (!recognition) {
@@ -2661,13 +2714,26 @@ function stopSpeechRecognition(userClickedStop = false) {
     input.placeholder = "Ask your Lead Agent (or click 🎙️ mic to speak)...";
   }
 
-  // If text was recognized, trigger the 3-second auto-send countdown
+  // If user explicitly clicked stop, or edited the text, or focused to edit:
+  // ABSOLUTELY DO NOT start the auto-send countdown!
+  if (userClickedStop || userEditedVoiceInput) {
+    clearVoiceCountdown();
+    return;
+  }
+
+  // If text was recognized and user hasn't edited, trigger the 3-second auto-send countdown
   if (input && input.value.trim().length > 0) {
     startVoiceCountdown();
   }
 }
 
 function startVoiceCountdown() {
+  // If user interacted or edited, never start countdown
+  if (userEditedVoiceInput) {
+    clearVoiceCountdown();
+    return;
+  }
+
   const input = document.getElementById("chat-input");
   if (!input || !input.value.trim()) return;
 
@@ -2679,20 +2745,31 @@ function startVoiceCountdown() {
   const timerText = document.getElementById("chat-timer-text");
   const sendBtn = document.getElementById("btn-send");
 
-  if (timerEl) timerEl.style.display = "inline-flex";
+  if (timerEl) {
+    timerEl.style.display = "inline-flex";
+    timerEl.title = "Auto-sending in 3s... Click badge or type in text box to edit & cancel";
+  }
   if (timerText) timerText.innerText = `${voiceCountdownSeconds}s`;
   if (sendBtn) sendBtn.innerText = `Send (${voiceCountdownSeconds}s)`;
 
   voiceCountdownTimer = setInterval(() => {
+    // If user edited during countdown, stop immediately!
+    if (userEditedVoiceInput) {
+      cancelVoiceCountdown();
+      return;
+    }
+
     voiceCountdownSeconds--;
     if (voiceCountdownSeconds > 0) {
       if (timerText) timerText.innerText = `${voiceCountdownSeconds}s`;
       if (sendBtn) sendBtn.innerText = `Send (${voiceCountdownSeconds}s)`;
     } else {
       clearVoiceCountdown();
-      setAutoReadAloud(true);
-      const form = document.getElementById("chat-form");
-      if (form) form.dispatchEvent(new Event("submit"));
+      if (!userEditedVoiceInput) {
+        setAutoReadAloud(true);
+        const form = document.getElementById("chat-form");
+        if (form) form.dispatchEvent(new Event("submit"));
+      }
     }
   }, 1000);
 }
@@ -2708,22 +2785,57 @@ function clearVoiceCountdown() {
   if (sendBtn && !sendBtn.disabled) sendBtn.innerText = "Send";
 }
 
-function cancelVoiceCountdown() {
+function cancelVoiceCountdown(e) {
+  if (e && e.stopPropagation) e.stopPropagation();
+  userEditedVoiceInput = true;
   clearVoiceCountdown();
+  // If recognition was still running, stop it so it won't overwrite manual edits
+  if (isRecognizing && recognition) {
+    try { recognition.stop(); } catch(err){}
+    isRecognizing = false;
+    const micBtn = document.getElementById("btn-mic");
+    if (micBtn) micBtn.classList.remove("listening");
+  }
 }
 
-function handleChatInputChange() {
-  // Editing or changing text inside the input cancels the countdown timer immediately
-  if (voiceCountdownTimer) {
-    cancelVoiceCountdown();
+// Intercepts typing, backspace, delete, paste, cut, clicks, and focus inside the chat input
+function handleChatInputInteraction(e) {
+  if (e && e.key === "Enter") {
+    // Allow Enter key to trigger form submission
+    return;
   }
+  // User interacted with the text box (typing, backspacing, clicking, pasting, or focusing)
+  userEditedVoiceInput = true;
+  cancelVoiceCountdown(e);
+}
+
+function handleChatInputChange(e) {
+  userEditedVoiceInput = true;
+  cancelVoiceCountdown(e);
 }
 
 function handleChatInputKeydown(e) {
-  // Typing keystrokes in the box cancels the timer
-  if (voiceCountdownTimer) {
-    cancelVoiceCountdown();
-  }
+  if (e && e.key === "Enter") return;
+  userEditedVoiceInput = true;
+  cancelVoiceCountdown(e);
+}
+
+// Attach listeners across all user interaction types to guarantee immediate countdown cancellation
+function attachChatInputWatchers() {
+  const input = document.getElementById("chat-input");
+  if (!input) return;
+
+  const events = ["input", "keydown", "keyup", "focus", "click", "mousedown", "pointerdown", "paste", "cut", "compositionstart"];
+  events.forEach((evtName) => {
+    input.addEventListener(evtName, handleChatInputInteraction, { passive: true });
+  });
+}
+
+// Call on startup
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", attachChatInputWatchers);
+} else {
+  attachChatInputWatchers();
 }
 
 function setAutoReadAloud(enable) {
