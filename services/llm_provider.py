@@ -28,11 +28,13 @@ class LLMProvider:
     """
     Unified Cascading LLM Provider with strict priority order:
     1. Priority 1: AWS Bedrock (Claude 3.5 / 4.5 Sonnet)
-    2. Priority 2: Groq Cloud (qwen/qwen3.8-27b or llama-3.3-70b-versatile)
-    3. Priority 3: Google Gemini (gemini-3.6-flash)
-    4. Priority 4: Local Offline Specialist Search Engine (Deterministic SQLite)
+    2. Priority 2: XKiro Gateway (DeepSeek V4 Pro) — PRIORITISED OVER GROQ
+    3. Priority 3: Groq Cloud (qwen/qwen3.8-27b or llama-3.3-70b-versatile)
+    4. Priority 4: Google Gemini (gemini-3.6-flash)
+    5. Priority 5: Local Offline Specialist Search Engine (Deterministic SQLite)
     """
     def __init__(self):
+        self._xkiro_client = None
         self._groq_client = None
         self._gemini_client = None
         self.reload_clients()
@@ -41,9 +43,26 @@ class LLMProvider:
         if not OPENAI_AVAILABLE:
             return
 
+        xkiro_key = os.getenv("XKIRO_API_KEY", "").strip()
+        xkiro_base = os.getenv("XKIRO_BASE_URL", "https://api.xkiro.com/v1").strip()
         groq_key = os.getenv("GROQ_API_KEY", "").strip()
         gemini_key = os.getenv("GEMINI_API_KEY", "").strip()
 
+        # Priority 2: XKiro (DeepSeek V4 Pro)
+        if xkiro_key:
+            try:
+                self._xkiro_client = OpenAI(
+                    base_url=xkiro_base,
+                    api_key=xkiro_key,
+                    timeout=45.0,
+                )
+            except Exception as e:
+                logger.warning(f"Failed to initialize XKiro client: {e}")
+                self._xkiro_client = None
+        else:
+            self._xkiro_client = None
+
+        # Priority 3: Groq Cloud
         if groq_key:
             try:
                 self._groq_client = OpenAI(
@@ -57,6 +76,7 @@ class LLMProvider:
         else:
             self._groq_client = None
 
+        # Priority 4: Gemini
         if gemini_key:
             try:
                 self._gemini_client = OpenAI(
@@ -72,38 +92,61 @@ class LLMProvider:
 
     def is_ready(self) -> bool:
         self.reload_clients()
-        return bedrock_client.is_ready() or self._groq_client is not None or self._gemini_client is not None
+        return (
+            bedrock_client.is_ready()
+            or self._xkiro_client is not None
+            or self._groq_client is not None
+            or self._gemini_client is not None
+        )
 
     def get_status(self) -> Dict[str, Any]:
         self.reload_clients()
-        bedrock_ready = bedrock_client.is_ready()
+        enable_aws = os.getenv("ENABLE_AWS", "false").lower() in ["true", "1", "yes"]
+        bedrock_ready = enable_aws and bedrock_client.is_ready()
+        xkiro_ready = self._xkiro_client is not None
         groq_ready = self._groq_client is not None
         gemini_ready = self._gemini_client is not None
 
         primary = "Offline Hybrid (Local DB)"
         if bedrock_ready:
             primary = "AWS Bedrock (Claude 3.5 Sonnet)"
+        elif xkiro_ready:
+            primary = f"XKiro ({os.getenv('XKIRO_MODEL', 'deepseek/deepseek-v4-pro')})"
         elif groq_ready:
             primary = f"Groq ({os.getenv('GROQ_MODEL', 'qwen/qwen3.8-27b')})"
         elif gemini_ready:
             primary = f"Gemini ({os.getenv('GEMINI_MODEL', 'gemini-3.6-flash')})"
 
+        chain = []
+        if bedrock_ready:
+            chain.append("AWS Bedrock (Claude)")
+        if xkiro_ready:
+            chain.append("XKiro (DeepSeek V4 Pro)")
+        if groq_ready:
+            chain.append("Groq (Qwen/Llama)")
+        if gemini_ready:
+            chain.append("Gemini (Flash)")
+        chain.append("Local Failsafe")
+
         return {
-            "ready": bedrock_ready or groq_ready or gemini_ready,
+            "ready": bedrock_ready or xkiro_ready or groq_ready or gemini_ready,
             "primary_provider": primary,
             "bedrock_active": bedrock_ready,
+            "xkiro_active": xkiro_ready,
             "groq_active": groq_ready,
             "gemini_active": gemini_ready,
-            "bedrock_model": LEAD_MODEL_ID,
+            "bedrock_model": LEAD_MODEL_ID if bedrock_ready else "Disabled",
+            "xkiro_model": os.getenv("XKIRO_MODEL", "deepseek/deepseek-v4-pro"),
             "groq_model": os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b"),
             "gemini_model": os.getenv("GEMINI_MODEL", "gemini-3.6-flash"),
-            "fallback_chain": "AWS Bedrock (Claude) -> Groq (Qwen/Llama) -> Gemini (Flash) -> Local Failsafe",
+            "fallback_chain": " -> ".join(chain),
         }
 
     def chat_completion(
         self,
         messages: List[Dict[str, Any]],
         tools: Optional[List[Dict[str, Any]]] = None,
+        tool_choice: Optional[str] = None,
         system_prompt: Optional[str] = None,
         temperature: float = 0.2,
         max_tokens: int = 1200,
@@ -111,16 +154,18 @@ class LLMProvider:
         """
         Executes chat completion with automated priority cascade:
         1. Priority 1: AWS Bedrock Claude 3.5 Sonnet
-        2. Priority 2: Groq Cloud (Qwen / Llama)
-        3. Priority 3: Google Gemini (Flash)
-        4. Priority 4: Local Specialist Engine
+        2. Priority 2: XKiro Gateway (DeepSeek V4 Pro)
+        3. Priority 3: Groq Cloud (Qwen / Llama)
+        4. Priority 4: Google Gemini (Flash)
+        5. Priority 5: Local Specialist Engine
         """
         self.reload_clients()
 
         # -------------------------------------------------------------
         # PRIORITY 1: AWS Bedrock Claude 3.5 Sonnet
         # -------------------------------------------------------------
-        if bedrock_client.is_ready() and not tools:
+        enable_aws = os.getenv("ENABLE_AWS", "false").lower() in ["true", "1", "yes"]
+        if enable_aws and bedrock_client.is_ready() and not tools:
             t0 = time.time()
             try:
                 bedrock_msgs = []
@@ -173,7 +218,7 @@ class LLMProvider:
                     db.record_token_usage("AWS Bedrock", LEAD_MODEL_ID, 0, 0, 0, latency_ms, "fallback", "chat", err_str[:200])
                 except Exception:
                     pass
-                print(f"[LLMProvider] Bedrock notice ({err_str[:120]}). Auto-falling back to Groq...")
+                print(f"[LLMProvider] Bedrock notice ({err_str[:120]}). Auto-falling back to XKiro DeepSeek V4 Pro...")
 
         formatted_messages = []
         if system_prompt:
@@ -181,7 +226,45 @@ class LLMProvider:
         formatted_messages.extend(messages)
 
         # -------------------------------------------------------------
-        # PRIORITY 2: Groq Cloud
+        # PRIORITY 2: XKiro Gateway (DeepSeek V4 Pro)
+        # Prioritised OVER Groq per user architecture configuration
+        # -------------------------------------------------------------
+        if self._xkiro_client:
+            xkiro_model = os.getenv("XKIRO_MODEL", "deepseek/deepseek-v4-pro")
+            t0 = time.time()
+            try:
+                kwargs = {
+                    "model": xkiro_model,
+                    "messages": formatted_messages,
+                    "temperature": temperature,
+                    "max_tokens": max_tokens,
+                }
+                if tools:
+                    kwargs["tools"] = tools
+                    kwargs["tool_choice"] = tool_choice or "auto"
+
+                resp = self._xkiro_client.chat.completions.create(**kwargs)
+                latency_ms = (time.time() - t0) * 1000
+                if resp.choices and len(resp.choices) > 0:
+                    pt = getattr(resp.usage, "prompt_tokens", 0) if hasattr(resp, "usage") and resp.usage else 0
+                    ct = getattr(resp.usage, "completion_tokens", 0) if hasattr(resp, "usage") and resp.usage else 0
+                    tt = getattr(resp.usage, "total_tokens", 0) if hasattr(resp, "usage") and resp.usage else (pt + ct)
+                    try:
+                        db.record_token_usage("XKiro", xkiro_model, pt, ct, tt, latency_ms, "success", "chat")
+                    except Exception as e_db:
+                        logger.warning(f"Could not log token usage: {e_db}")
+                    return resp.choices[0].message, f"XKiro ({xkiro_model})"
+            except Exception as e:
+                err_str = str(e)
+                latency_ms = (time.time() - t0) * 1000
+                try:
+                    db.record_token_usage("XKiro", xkiro_model, 0, 0, 0, latency_ms, "fallback", "chat", err_str[:200])
+                except Exception:
+                    pass
+                print(f"[LLMProvider] XKiro notice ({err_str[:120]}). Auto-falling back to Groq...")
+
+        # -------------------------------------------------------------
+        # PRIORITY 3: Groq Cloud
         # -------------------------------------------------------------
         if self._groq_client:
             groq_model = os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b")
@@ -195,7 +278,7 @@ class LLMProvider:
                 }
                 if tools:
                     kwargs["tools"] = tools
-                    kwargs["tool_choice"] = "auto"
+                    kwargs["tool_choice"] = tool_choice or "auto"
 
                 resp = self._groq_client.chat.completions.create(**kwargs)
                 latency_ms = (time.time() - t0) * 1000
@@ -218,7 +301,7 @@ class LLMProvider:
                 print(f"[LLMProvider] Groq notice ({err_str[:120]}). Auto-falling back to Gemini...")
 
         # -------------------------------------------------------------
-        # PRIORITY 3: Google Gemini
+        # PRIORITY 4: Google Gemini
         # -------------------------------------------------------------
         if self._gemini_client:
             gemini_model = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
@@ -232,7 +315,7 @@ class LLMProvider:
                 }
                 if tools:
                     kwargs["tools"] = tools
-                    kwargs["tool_choice"] = "auto"
+                    kwargs["tool_choice"] = tool_choice or "auto"
 
                 resp = self._gemini_client.chat.completions.create(**kwargs)
                 latency_ms = (time.time() - t0) * 1000
@@ -255,7 +338,7 @@ class LLMProvider:
                 print(f"[LLMProvider] Gemini notice ({err_str[:120]}). Auto-falling back to Local Engine...")
 
         # -------------------------------------------------------------
-        # PRIORITY 4: Local Specialist Engine
+        # PRIORITY 5: Local Specialist Engine
         # -------------------------------------------------------------
         try:
             db.record_token_usage("Local Engine", "Rule & SQLite Specialist", 0, 0, 0, 5.0, "success", "chat")
@@ -270,7 +353,7 @@ class LLMProvider:
         max_tokens: int = 1500,
         temperature: float = 0.1,
     ) -> Tuple[Optional[str], str]:
-        """Analyze document text through cascade: Bedrock -> Groq -> Gemini."""
+        """Analyze document text through cascade: Bedrock -> XKiro -> Groq -> Gemini."""
         msg = [{"role": "user", "content": prompt}]
         res_msg, provider = self.chat_completion(
             messages=msg,

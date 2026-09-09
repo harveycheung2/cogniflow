@@ -10,212 +10,332 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
 :root {
-  --bg-main: #0a0d14;
-  --bg-panel: rgba(20, 26, 40, 0.78);
-  --bg-card: rgba(30, 39, 58, 0.65);
-  --bg-input: #121824;
-  --border-color: rgba(255, 255, 255, 0.08);
+  /* =========================================================================
+     APPLE DESIGN SYSTEM TOKENS (SKILL.md §4, §12, §15)
+     ========================================================================= */
+  --bg-main: #06080d;
+  --bg-panel: rgba(16, 22, 36, 0.72);
+  --bg-panel-solid: #111726;
+  --bg-card: rgba(255, 255, 255, 0.04);
+  --bg-card-hover: rgba(255, 255, 255, 0.075);
+  --bg-card-active: rgba(255, 255, 255, 0.1);
+  --bg-input: rgba(12, 16, 26, 0.85);
+
+  /* Materials & Specular Borders */
+  --border-color: rgba(255, 255, 255, 0.09);
+  --border-specular-top: rgba(255, 255, 255, 0.18);
+  --border-specular-inner: inset 0 1px 0 0 rgba(255, 255, 255, 0.12);
   --border-glow: rgba(0, 242, 254, 0.35);
+
+  /* System Accents */
   --accent-cyan: #00f2fe;
-  --accent-blue: #4facfe;
-  --accent-purple: #8e2de2;
-  --accent-green: #00f5a0;
-  --accent-yellow: #f6d365;
-  --accent-red: #ff6b6b;
-  --text-main: #f0f4fc;
-  --text-muted: #8e9bb0;
-  --radius-lg: 16px;
+  --accent-blue: #0a84ff;
+  --accent-purple: #bf5af2;
+  --accent-green: #30d158;
+  --accent-yellow: #ffd60a;
+  --accent-red: #ff453a;
+  --accent-orange: #ff9f0a;
+
+  /* Typography */
+  --text-main: #f5f5f7;
+  --text-muted: #86868b;
+  --text-tertiary: #636366;
+  --font-system: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "SF Pro", "Inter", sans-serif;
+  --font-mono: "SF Mono", "JetBrains Mono", Menlo, Consolas, Monaco, monospace;
+
+  /* Geometry & Physics */
+  --radius-xl: 20px;
+  --radius-lg: 14px;
   --radius-md: 10px;
-  --radius-sm: 6px;
-  --shadow-panel: 0 8px 32px rgba(0, 0, 0, 0.5);
+  --radius-sm: 8px;
+  --radius-pill: 980px;
+
+  --shadow-panel: 0 16px 40px -10px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  --shadow-floating: 0 24px 60px -12px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(255, 255, 255, 0.12);
+
+  /* Apple Fluid Spring Curves */
+  --spring-default: cubic-bezier(0.25, 1, 0.5, 1);
+  --spring-bouncy: cubic-bezier(0.34, 1.25, 0.64, 1);
+  --spring-snappy: cubic-bezier(0.2, 0, 0, 1);
 }
 
 * {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  background: radial-gradient(circle at top left, #111827, #0a0d14 65%);
+  font-family: var(--font-system);
+  background: radial-gradient(ellipse at 50% -10%, #172133 0%, #06080d 75%);
+  background-attachment: fixed;
   color: var(--text-main);
   min-height: 100vh;
   overflow-x: hidden;
+  font-optical-sizing: auto;
+  line-height: 1.5;
+  letter-spacing: -0.006em;
+}
+
+/* Custom macOS/iOS Translucent Capsule Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: var(--radius-pill);
+  border: 1px solid transparent;
+  background-clip: padding-box;
+  transition: background-color 0.2s ease;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.35);
 }
 
 .app-container {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  padding: 16px 24px;
-  gap: 14px;
+  padding: 14px 20px;
+  gap: 12px;
+  max-width: 1920px;
+  margin: 0 auto;
+  width: 100%;
 }
 
-/* Navbar */
+/* =========================================================================
+   1. INSTANT PRESS FEEDBACK — KILL LATENCY (SKILL.md §1, §4)
+   ========================================================================= */
+.btn:active,
+.tab-btn:active,
+.chip:active,
+.timeline-card:active,
+.task-check-btn:active,
+.btn-read-bubble:active,
+.btn-mic:active,
+.task-delete-btn:active,
+.doc-badge-link:active,
+.doc-card:active,
+.dossier-tab-btn:active,
+.dossier-doc-link:active {
+  transform: scale(0.965) !important;
+  transition: transform 80ms var(--spring-snappy) !important;
+}
+
+/* =========================================================================
+   2. NAVBAR & HEADER MATERIAL (SKILL.md §12)
+   ========================================================================= */
 .navbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
   background: var(--bg-panel);
-  backdrop-filter: blur(18px);
+  backdrop-filter: blur(28px) saturate(190%) contrast(105%);
+  -webkit-backdrop-filter: blur(28px) saturate(190%);
   border: 1px solid var(--border-color);
+  border-top: 1px solid var(--border-specular-top);
+  box-shadow: var(--shadow-panel), var(--border-specular-inner);
   border-radius: var(--radius-lg);
-  padding: 12px 24px;
-  box-shadow: var(--shadow-panel);
+  padding: 10px 20px;
+  z-index: 50;
 }
 
 .brand {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
 }
 
 .logo-icon {
-  font-size: 24px;
+  font-size: 22px;
   background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
-  width: 42px;
-  height: 42px;
+  width: 38px;
+  height: 38px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 12px;
-  box-shadow: 0 0 20px rgba(0, 242, 254, 0.4);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 16px rgba(0, 242, 254, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-
 .brand-logo-img {
-  height: 38px;
+  height: 34px;
   width: auto;
-  max-width: 250px;
+  max-width: 220px;
   object-fit: contain;
-  filter: drop-shadow(0 0 10px rgba(0, 242, 254, 0.45));
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  filter: drop-shadow(0 2px 10px rgba(0, 242, 254, 0.4));
+  transition: transform 0.35s var(--spring-default), filter 0.35s ease;
   cursor: pointer;
 }
 .brand-logo-img:hover {
-  transform: scale(1.02);
-  filter: drop-shadow(0 0 16px rgba(0, 242, 254, 0.75));
+  transform: scale(1.025);
+  filter: drop-shadow(0 4px 16px rgba(0, 242, 254, 0.7));
 }
 
 .brand h1 {
-  font-size: 1.2rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  font-size: 1.15rem;
+  font-weight: 680;
+  letter-spacing: -0.025em;
+  color: var(--text-main);
 }
 
 .badge-version {
-  font-size: 0.72rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
   padding: 2px 8px;
-  background: rgba(0, 242, 254, 0.15);
+  background: rgba(0, 242, 254, 0.12);
   color: var(--accent-cyan);
-  border-radius: 12px;
-  border: 1px solid rgba(0, 242, 254, 0.3);
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(0, 242, 254, 0.28);
 }
 
 .subtitle {
-  font-size: 0.78rem;
+  font-size: 0.75rem;
   color: var(--text-muted);
+  letter-spacing: -0.005em;
 }
 
+/* =========================================================================
+   3. APPLE SEGMENTED CONTROL (SKILL.md §7, §16)
+   ========================================================================= */
 .nav-tabs {
-  display: flex;
-  background: rgba(0, 0, 0, 0.25);
-  padding: 4px;
-  border-radius: 12px;
-  border: 1px solid var(--border-color);
-  gap: 4px;
+  display: inline-flex;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.38);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  padding: 3px;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
+  gap: 2px;
 }
 
 .tab-btn {
   background: transparent;
   border: none;
   color: var(--text-muted);
-  padding: 6px 14px;
-  font-size: 0.82rem;
-  font-weight: 600;
-  border-radius: 8px;
+  padding: 6px 16px;
+  font-size: 0.8rem;
+  font-weight: 580;
+  letter-spacing: -0.012em;
+  border-radius: var(--radius-pill);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: color 0.2s ease, background-color 0.25s var(--spring-default), box-shadow 0.25s var(--spring-default);
   display: flex;
   align-items: center;
   gap: 6px;
+  user-select: none;
 }
-
+.tab-btn:hover {
+  color: var(--text-main);
+}
 .tab-btn.active {
-  background: var(--bg-card);
-  color: var(--accent-cyan);
-  border: 1px solid var(--border-glow);
-  box-shadow: 0 0 12px rgba(0, 242, 254, 0.2);
+  background: rgba(255, 255, 255, 0.14) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
 }
 
+/* =========================================================================
+   4. STATUS PILLS & METRICS (SKILL.md §12, §16)
+   ========================================================================= */
 .header-badges {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .status-pill {
-  font-size: 0.76rem;
-  font-weight: 500;
+  font-size: 0.74rem;
+  font-weight: 550;
+  letter-spacing: -0.005em;
   padding: 5px 12px;
-  border-radius: 20px;
+  border-radius: var(--radius-pill);
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   border: 1px solid var(--border-color);
-  background: rgba(0, 0, 0, 0.2);
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: all 0.25s var(--spring-default);
+}
+.status-pill:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.18);
 }
 
 .status-pill .dot {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
+  transition: all 0.3s ease;
 }
 
 .status-ready {
-  color: var(--accent-green);
-  border-color: rgba(0, 245, 160, 0.3);
-  background: rgba(0, 245, 160, 0.08);
+  color: #5efc82;
+  border-color: rgba(48, 209, 88, 0.3);
+  background: rgba(48, 209, 88, 0.08);
 }
 .status-ready .dot {
   background: var(--accent-green);
-  box-shadow: 0 0 8px var(--accent-green);
+  box-shadow: 0 0 10px rgba(48, 209, 88, 0.8);
 }
 
 .status-loading {
   color: var(--accent-yellow);
+  border-color: rgba(255, 214, 10, 0.25);
+  background: rgba(255, 214, 10, 0.06);
 }
 .status-loading .dot {
   background: var(--accent-yellow);
+  box-shadow: 0 0 8px rgba(255, 214, 10, 0.6);
+  animation: pulseDot 1.4s infinite ease-in-out;
+}
+@keyframes pulseDot {
+  0%, 100% { opacity: 0.4; transform: scale(0.85); }
+  50% { opacity: 1; transform: scale(1.15); }
 }
 
 .term-picker {
   display: flex;
   align-items: center;
   gap: 6px;
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--border-color);
   padding: 4px 10px;
-  border-radius: 20px;
-  font-size: 0.78rem;
+  border-radius: var(--radius-pill);
+  font-size: 0.74rem;
   color: var(--text-muted);
+  backdrop-filter: blur(10px);
 }
 .term-picker select {
   background: transparent;
   border: none;
   color: var(--accent-cyan);
   font-weight: 600;
-  font-size: 0.8rem;
+  font-size: 0.76rem;
   outline: none;
   cursor: pointer;
+  font-family: inherit;
 }
 .term-picker select option {
-  background: #141a28;
+  background: #111724;
   color: #fff;
 }
 
-/* Main Layout Views */
+/* =========================================================================
+   5. MAIN LAYOUT & TRANSLUCENT PANELS (SKILL.md §12)
+   ========================================================================= */
 .view-container {
   flex: 1;
   min-height: 0;
@@ -227,123 +347,156 @@ body {
 
 .dashboard-grid {
   grid-template-columns: 1.05fr 1.35fr 1.05fr;
-  gap: 14px;
+  gap: 12px;
 }
 
 .docs-grid {
   grid-template-columns: 1.2fr 1.8fr;
-  gap: 14px;
+  gap: 12px;
 }
 
-/* Panels */
 .panel {
   background: var(--bg-panel);
-  backdrop-filter: blur(20px);
+  backdrop-filter: blur(28px) saturate(190%) contrast(105%);
+  -webkit-backdrop-filter: blur(28px) saturate(190%);
   border: 1px solid var(--border-color);
+  border-top: 1px solid var(--border-specular-top);
+  box-shadow: var(--shadow-panel), var(--border-specular-inner);
   border-radius: var(--radius-lg);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  box-shadow: var(--shadow-panel);
+  position: relative;
 }
 
 .panel-header {
-  padding: 14px 18px;
+  padding: 12px 18px;
   display: flex;
   justify-content: space-between;
   align-items: center;
   border-bottom: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.015);
 }
 
 .panel-header h2 {
-  font-size: 0.92rem;
-  font-weight: 600;
-  letter-spacing: -0.01em;
+  font-size: 0.88rem;
+  font-weight: 650;
+  letter-spacing: -0.018em;
   display: flex;
   align-items: center;
   gap: 8px;
+  color: var(--text-main);
 }
 
 .section-break {
   border-top: 1px solid var(--border-color);
-  margin-top: 8px;
+  margin-top: 6px;
 }
 
 .count-tag {
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   font-weight: 600;
+  letter-spacing: 0.015em;
   background: rgba(255, 255, 255, 0.08);
-  padding: 3px 8px;
-  border-radius: 12px;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
   color: var(--text-muted);
+  border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .ai-model-tag {
-  font-size: 0.7rem;
-  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.68rem;
+  font-family: var(--font-mono);
+  font-weight: 550;
+  letter-spacing: 0.02em;
   color: var(--accent-cyan);
-  background: rgba(0, 242, 254, 0.1);
+  background: rgba(0, 242, 254, 0.09);
   padding: 3px 8px;
-  border-radius: 6px;
-  border: 1px solid rgba(0, 242, 254, 0.2);
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(0, 242, 254, 0.24);
+  transition: all 0.2s var(--spring-default);
+}
+.ai-model-tag:hover {
+  background: rgba(0, 242, 254, 0.16);
+  border-color: rgba(0, 242, 254, 0.45);
+  box-shadow: 0 0 12px rgba(0, 242, 254, 0.25);
 }
 
-/* Buttons */
+/* =========================================================================
+   6. APPLE TACTILE BUTTONS (SKILL.md §1, §4, §16)
+   ========================================================================= */
 .btn {
   font-family: inherit;
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   font-weight: 600;
+  letter-spacing: -0.01em;
   padding: 7px 14px;
   border-radius: var(--radius-sm);
   cursor: pointer;
   border: none;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
-  transition: all 0.2s ease;
+  transition: transform 0.25s var(--spring-default), box-shadow 0.25s var(--spring-default), background-color 0.2s ease, opacity 0.2s ease;
+  user-select: none;
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
-  color: #fff;
-  box-shadow: 0 4px 14px rgba(79, 172, 254, 0.3);
+  background: linear-gradient(135deg, #0071e3, #4facfe);
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(0, 113, 227, 0.35);
+  border-top: 1px solid rgba(255, 255, 255, 0.3);
 }
 .btn-primary:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(79, 172, 254, 0.45);
+  transform: translateY(-1.5px);
+  box-shadow: 0 6px 20px rgba(0, 113, 227, 0.5);
 }
 
 .btn-cyan {
-  background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
-  color: #0a0d14;
-  font-weight: 700;
+  background: linear-gradient(135deg, #00c6ff, #0072ff);
+  color: #ffffff;
+  font-weight: 650;
+  box-shadow: 0 4px 14px rgba(0, 198, 255, 0.3);
+  border-top: 1px solid rgba(255, 255, 255, 0.3);
 }
 .btn-cyan:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 16px rgba(0, 242, 254, 0.4);
+  transform: translateY(-1.5px);
+  box-shadow: 0 6px 20px rgba(0, 198, 255, 0.45);
 }
 
 .btn-outline {
-  background: transparent;
+  background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--border-color);
   color: var(--text-main);
+  backdrop-filter: blur(8px);
 }
 .btn-outline:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+.btn-outline.active {
+  background: rgba(0, 242, 254, 0.14) !important;
+  border-color: rgba(0, 242, 254, 0.38) !important;
+  color: var(--accent-cyan) !important;
 }
 
 .btn-sm {
   padding: 4px 10px;
-  font-size: 0.74rem;
+  font-size: 0.72rem;
+  border-radius: 6px;
 }
 
-/* Timeline & Cards */
+/* =========================================================================
+   7. TIMELINE, TASK, COURSE & DOC CARDS (SKILL.md §4, §12)
+   ========================================================================= */
 .schedule-timeline, .tasks-list, .courses-list, .announcements-feed, .docs-list, .syllabus-timeline {
-  padding: 12px 16px;
+  padding: 12px 14px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
+  overscroll-behavior: contain;
 }
 
 .timeline-card {
@@ -355,23 +508,30 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  transition: border-color 0.2s ease;
+  transition: transform 0.28s var(--spring-default), border-color 0.2s ease, background 0.2s ease, box-shadow 0.28s var(--spring-default);
+  cursor: pointer;
 }
 .timeline-card:hover {
-  border-color: var(--accent-cyan);
+  background: var(--bg-card-hover);
+  border-color: rgba(0, 242, 254, 0.5);
+  transform: translateY(-1.5px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
 }
 
 .timeline-time {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.72rem;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
   color: var(--accent-cyan);
   font-weight: 600;
+  letter-spacing: 0.02em;
 }
 
 .timeline-title {
-  font-size: 0.82rem;
-  font-weight: 500;
+  font-size: 0.8rem;
+  font-weight: 550;
   margin-top: 2px;
+  color: var(--text-main);
+  letter-spacing: -0.01em;
 }
 
 .task-item {
@@ -382,111 +542,182 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  transition: transform 0.28s var(--spring-default), background 0.2s ease, opacity 0.3s ease;
+}
+.task-item:hover {
+  background: var(--bg-card-hover);
+  transform: translateY(-1px);
 }
 .task-check-btn {
-  background: transparent;
-  border: 1px solid var(--text-muted);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1.5px solid var(--text-muted);
   width: 18px;
   height: 18px;
-  border-radius: 4px;
+  border-radius: 5px;
   cursor: pointer;
   margin-right: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s var(--spring-default);
+}
+.task-check-btn:hover {
+  border-color: var(--accent-cyan);
+  background: rgba(0, 242, 254, 0.15);
 }
 .task-item.completed {
-  opacity: 0.5;
+  opacity: 0.45;
   text-decoration: line-through;
+  filter: grayscale(0.6);
+}
+.task-item.completed .task-check-btn {
+  background: var(--accent-green);
+  border-color: var(--accent-green);
 }
 
 .priority-badge {
-  font-size: 0.68rem;
+  font-size: 0.65rem;
   font-weight: 700;
-  padding: 2px 6px;
+  letter-spacing: 0.02em;
+  padding: 2px 7px;
   border-radius: 4px;
+  text-transform: uppercase;
 }
 .priority-high {
-  background: rgba(255, 107, 107, 0.18);
+  background: rgba(255, 69, 58, 0.18);
   color: var(--accent-red);
+  border: 1px solid rgba(255, 69, 58, 0.3);
 }
 .priority-med {
-  background: rgba(246, 211, 101, 0.18);
+  background: rgba(255, 214, 10, 0.16);
   color: var(--accent-yellow);
+  border: 1px solid rgba(255, 214, 10, 0.28);
 }
 
-/* Chat UI */
+/* =========================================================================
+   8. PROMPT CHIPS & CONVERSATION DOCK (SKILL.md §1, §4, §12)
+   ========================================================================= */
 .prompt-chips {
   display: flex;
   gap: 8px;
   padding: 10px 16px;
   overflow-x: auto;
   border-bottom: 1px solid var(--border-color);
+  background: rgba(0, 0, 0, 0.15);
+  overscroll-behavior: contain;
 }
 .chip {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--border-color);
   color: var(--text-muted);
   font-size: 0.72rem;
-  padding: 4px 10px;
-  border-radius: 14px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
   cursor: pointer;
   white-space: nowrap;
-  transition: all 0.2s ease;
+  transition: transform 0.25s var(--spring-default), background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+  user-select: none;
 }
 .chip:hover {
   background: rgba(0, 242, 254, 0.1);
   color: var(--accent-cyan);
-  border-color: rgba(0, 242, 254, 0.3);
+  border-color: rgba(0, 242, 254, 0.35);
+  transform: translateY(-1px);
 }
 
 .chat-messages {
   flex: 1;
-  padding: 16px 20px;
+  padding: 16px 18px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
+  overscroll-behavior: contain;
 }
 
 .chat-bubble {
-  max-width: 90%;
+  max-width: 88%;
   padding: 12px 16px;
   border-radius: var(--radius-md);
-  font-size: 0.85rem;
-  line-height: 1.5;
+  font-size: 0.83rem;
+  line-height: 1.55;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  animation: bubblePop 0.3s var(--spring-default);
 }
+@keyframes bubblePop {
+  0% { opacity: 0; transform: translateY(6px) scale(0.98); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
 .chat-bubble.assistant {
   position: relative;
-  background: rgba(30, 39, 58, 0.85);
+  background: rgba(22, 28, 42, 0.82);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
   border: 1px solid var(--border-color);
+  border-top: 1px solid var(--border-specular-top);
   align-self: flex-start;
   padding-right: 75px;
+}
+
+.chat-bubble.user {
+  background: linear-gradient(135deg, rgba(0, 113, 227, 0.9), rgba(142, 45, 226, 0.85));
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-top: 1px solid rgba(255, 255, 255, 0.35);
+  align-self: flex-end;
+  color: #ffffff;
+  box-shadow: 0 6px 20px rgba(0, 113, 227, 0.35);
+}
+
+.sender-tag {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--accent-cyan);
+  margin-bottom: 4px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
 }
 
 .btn-read-bubble {
   position: absolute;
   top: 10px;
   right: 12px;
-  background: rgba(255, 255, 255, 0.07);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   color: var(--text-muted);
   border-radius: 6px;
   font-size: 0.68rem;
+  font-weight: 550;
   padding: 3px 8px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  transition: all 0.2s ease;
+  transition: all 0.2s var(--spring-default);
 }
 .btn-read-bubble:hover {
-  background: rgba(0, 242, 254, 0.2);
+  background: rgba(0, 242, 254, 0.18);
   border-color: var(--accent-cyan);
   color: #fff;
 }
 .btn-read-bubble.speaking {
-  background: rgba(16, 185, 129, 0.25);
-  border-color: #10b981;
-  color: #10b981;
-  box-shadow: 0 0 10px rgba(16, 185, 129, 0.35);
+  background: rgba(48, 209, 88, 0.22);
+  border-color: var(--accent-green);
+  color: var(--accent-green);
+  box-shadow: 0 0 10px rgba(48, 209, 88, 0.4);
+}
+
+/* Chat Input Dock */
+.chat-input-row {
+  display: flex;
+  gap: 10px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--border-color);
+  background: rgba(12, 16, 26, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
 }
 
 .chat-input-wrapper {
@@ -498,47 +729,26 @@ body {
 .chat-input-wrapper input {
   width: 100%;
   padding-right: 70px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 0.83rem;
+  outline: none;
+  font-family: inherit;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
-.chat-input-timer {
-  display: none;
-  position: absolute;
-  right: 10px;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 8px;
-  border-radius: 12px;
-  background: rgba(0, 242, 254, 0.16);
-  border: 1px solid rgba(0, 242, 254, 0.45);
-  color: var(--accent-cyan);
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  pointer-events: none;
-  user-select: none;
-  animation: timer-glow 1s infinite alternate;
-}
-.chat-input-timer .timer-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--accent-cyan);
-  box-shadow: 0 0 6px var(--accent-cyan);
-  animation: timer-pulse 0.8s infinite alternate;
-}
-@keyframes timer-glow {
-  0% { box-shadow: 0 0 0 0 rgba(0, 242, 254, 0.2); }
-  100% { box-shadow: 0 0 8px rgba(0, 242, 254, 0.4); }
-}
-@keyframes timer-pulse {
-  0% { transform: scale(0.85); opacity: 0.6; }
-  100% { transform: scale(1.15); opacity: 1; }
+.chat-input-wrapper input:focus {
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 0 3px rgba(0, 242, 254, 0.22);
 }
 
 .btn-mic {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 42px;
+  width: 40px;
   height: 38px;
   padding: 0;
   border-radius: var(--radius-sm);
@@ -546,8 +756,8 @@ body {
   border: 1px solid var(--border-color);
   color: var(--text-main);
   cursor: pointer;
-  transition: all 0.2s ease;
-  font-size: 1.15rem;
+  transition: all 0.2s var(--spring-default);
+  font-size: 1.1rem;
   flex-shrink: 0;
 }
 .btn-mic:hover {
@@ -556,51 +766,377 @@ body {
   color: var(--accent-cyan);
 }
 .btn-mic.listening {
-  background: rgba(239, 68, 68, 0.25) !important;
-  border-color: #ef4444 !important;
-  color: #ef4444 !important;
+  background: rgba(255, 69, 58, 0.25) !important;
+  border-color: var(--accent-red) !important;
+  color: var(--accent-red) !important;
   animation: mic-pulse 1.2s infinite;
 }
-@keyframes mic-pulse {
-  0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6); }
-  70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
-}
-.chat-bubble.user {
-  background: linear-gradient(135deg, rgba(79, 172, 254, 0.3), rgba(142, 45, 226, 0.3));
-  border: 1px solid rgba(79, 172, 254, 0.4);
-  align-self: flex-end;
-}
 
-.sender-tag {
-  font-size: 0.7rem;
-  font-weight: 700;
-  color: var(--accent-cyan);
-  margin-bottom: 4px;
-  letter-spacing: 0.03em;
-}
-
-.chat-input-row {
-  display: flex;
-  gap: 10px;
-  padding: 12px 18px;
-  border-top: 1px solid var(--border-color);
-  background: rgba(15, 20, 30, 0.6);
-}
-.chat-input-row input {
-  flex: 1;
-  background: var(--bg-input);
-  border: 1px solid var(--border-color);
-  color: var(--text-main);
-  padding: 10px 14px;
+/* =========================================================================
+   9. CLICKABLE DOC BADGE & DOC CARDS (SKILL.md §4, §12)
+   ========================================================================= */
+.doc-badge-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(135deg, rgba(0, 242, 254, 0.15), rgba(79, 172, 254, 0.15));
+  border: 1px solid rgba(0, 242, 254, 0.5);
+  border-top: 1px solid rgba(255, 255, 255, 0.3);
+  color: var(--accent-cyan) !important;
+  text-decoration: none !important;
+  font-weight: 600;
+  padding: 8px 14px;
   border-radius: var(--radius-sm);
-  font-size: 0.85rem;
-  outline: none;
+  margin: 10px 0;
+  box-shadow: 0 4px 16px rgba(0, 242, 254, 0.2);
+  transition: transform 0.28s var(--spring-default), box-shadow 0.28s var(--spring-default), background 0.2s ease;
 }
-.chat-input-row input:focus {
+.doc-badge-link:hover {
+  background: linear-gradient(135deg, rgba(0, 242, 254, 0.28), rgba(79, 172, 254, 0.28));
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 242, 254, 0.4);
+}
+
+.doc-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  transition: transform 0.25s var(--spring-default), background 0.2s ease, border-color 0.2s ease;
+}
+.doc-card:hover {
+  background: var(--bg-card-hover);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-1.5px);
+}
+
+.doc-tag {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+}
+
+/* =========================================================================
+   10. SYLLABUS, SUBAGENTS & THINKING (SKILL.md §4, §12)
+   ========================================================================= */
+.schedule-event-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  border-left: 3px solid var(--accent-blue);
+  transition: transform 0.25s var(--spring-default), background 0.2s ease;
+}
+.schedule-event-card:hover {
+  background: var(--bg-card-hover);
+  transform: translateY(-1px);
+}
+.schedule-event-card.event-tutorial {
+  border-left-color: var(--accent-cyan);
+}
+.schedule-event-card.event-exam, .schedule-event-card.event-ca_quiz {
+  border-left-color: var(--accent-red);
+}
+
+.subagent-compact-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(0, 242, 254, 0.07);
+  border: 1px solid rgba(0, 242, 254, 0.28);
+  border-radius: var(--radius-pill);
+  padding: 4px 12px;
+  margin: 4px 6px 8px 0;
+  font-size: 0.74rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+.subagent-badge-title {
+  color: var(--accent-cyan);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+.subagent-badge-desc {
+  color: var(--text-muted);
+  font-size: 0.73rem;
+}
+.subagent-pulse {
+  width: 6px;
+  height: 6px;
+  background: var(--accent-cyan);
+  border-radius: 50%;
+  box-shadow: 0 0 8px var(--accent-cyan);
+  display: inline-block;
+  animation: pulse-glow 1.2s infinite alternate;
+}
+@keyframes pulse-glow {
+  from { opacity: 0.4; transform: scale(0.85); }
+  to { opacity: 1; transform: scale(1.2); }
+}
+
+.chat-bubble.thinking {
+  background: rgba(24, 32, 48, 0.75);
+  border-left: 3px solid var(--accent-cyan);
+  padding: 12px 16px;
+}
+.thinking-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+}
+.typing-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.typing-dots span {
+  width: 6px;
+  height: 6px;
+  background: var(--accent-cyan);
+  border-radius: 50%;
+  display: inline-block;
+  animation: bounce-dots 1.4s infinite ease-in-out both;
+}
+.typing-dots span:nth-child(1) { animation-delay: -0.32s; }
+.typing-dots span:nth-child(2) { animation-delay: -0.16s; }
+.typing-dots span:nth-child(3) { animation-delay: 0s; }
+@keyframes bounce-dots {
+  0%, 80%, 100% { transform: scale(0.2); opacity: 0.2; }
+  40% { transform: scale(1); opacity: 1; box-shadow: 0 0 8px var(--accent-cyan); }
+}
+.thinking-text {
+  font-size: 0.76rem;
+  color: var(--accent-cyan);
+  opacity: 0.9;
+  letter-spacing: 0.01em;
+}
+
+/* =========================================================================
+   11. TIMETABLE PANEL & COURSE DOSSIER HUB (SKILL.md §12, §16)
+   ========================================================================= */
+.timetable-panel-container {
+  padding: 12px 16px 4px 16px;
+}
+.timetable-prompt-card {
+  background: linear-gradient(135deg, rgba(0, 242, 254, 0.05) 0%, rgba(79, 172, 254, 0.08) 100%);
+  border: 1.5px dashed rgba(0, 242, 254, 0.35);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  transition: all 0.25s var(--spring-default);
+}
+.timetable-prompt-card:hover {
   border-color: var(--accent-cyan);
-  box-shadow: 0 0 8px rgba(0, 242, 254, 0.3);
+  background: linear-gradient(135deg, rgba(0, 242, 254, 0.08) 0%, rgba(79, 172, 254, 0.14) 100%);
+  box-shadow: 0 4px 18px rgba(0, 242, 254, 0.15);
 }
+.timetable-saved-card {
+  background: linear-gradient(135deg, rgba(20, 28, 45, 0.85) 0%, rgba(30, 42, 65, 0.7) 100%);
+  border: 1px solid rgba(0, 242, 254, 0.25);
+  border-left: 4px solid var(--accent-cyan);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  transition: all 0.2s var(--spring-default);
+}
+.timetable-saved-card:hover {
+  transform: translateY(-1.5px);
+  border-color: var(--accent-cyan);
+  box-shadow: 0 6px 20px rgba(0, 242, 254, 0.2);
+}
+
+.course-dossier-hub {
+  background: rgba(13, 19, 34, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(0, 242, 254, 0.25);
+  border-top: 1px solid var(--border-specular-top);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6);
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 8px 0;
+  animation: appleMaterialize 0.28s var(--spring-default);
+}
+.dossier-tab-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #cbd5e0;
+  padding: 5px 14px;
+  border-radius: var(--radius-pill);
+  font-size: 0.75rem;
+  font-weight: 580;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s var(--spring-default);
+}
+.dossier-tab-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+.dossier-tab-btn.active {
+  background: rgba(0, 242, 254, 0.2) !important;
+  border-color: var(--accent-cyan) !important;
+  color: #fff !important;
+  box-shadow: 0 0 12px rgba(0, 242, 254, 0.25);
+}
+
+.dossier-course-card {
+  background: rgba(18, 25, 41, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: border-color 0.2s ease, transform 0.25s var(--spring-default);
+}
+.dossier-course-card:hover {
+  border-color: rgba(0, 242, 254, 0.35);
+  transform: translateY(-1px);
+}
+
+/* =========================================================================
+   12. APPLE FROSTED GLASS MODAL CRYSTALLIZATION (SKILL.md §12, §16)
+   ========================================================================= */
+.modal-backdrop {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(4, 7, 13, 0.72);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: modalBackdropFadeIn 0.28s ease-out forwards;
+}
+.modal-backdrop.hidden { display: none; }
+
+@keyframes modalBackdropFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.token-monitor-modal-card,
+.timetable-modal-card {
+  background: rgba(18, 24, 38, 0.92);
+  backdrop-filter: blur(36px) saturate(190%) contrast(105%);
+  -webkit-backdrop-filter: blur(36px) saturate(190%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-top: 1px solid var(--border-specular-top);
+  box-shadow: var(--shadow-floating), var(--border-specular-inner);
+  border-radius: var(--radius-lg);
+  animation: appleMaterialize 0.32s var(--spring-default) forwards;
+  overflow: hidden;
+}
+
+@keyframes appleMaterialize {
+  0% {
+    opacity: 0;
+    transform: scale(0.95) translateY(12px);
+    filter: blur(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    filter: blur(0);
+  }
+}
+
+.tt-modal-header,
+.token-modal-header {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.tt-modal-header h2,
+.token-modal-header h2 {
+  font-size: 0.96rem;
+  font-weight: 680;
+  letter-spacing: -0.02em;
+}
+
+.empty-state {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  text-align: center;
+  padding: 24px;
+}
+
+.toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: rgba(18, 24, 38, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--accent-cyan);
+  border-top: 1px solid rgba(255, 255, 255, 0.3);
+  color: var(--text-main);
+  padding: 12px 20px;
+  border-radius: var(--radius-md);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+  display: none;
+  font-size: 0.82rem;
+  z-index: 1000;
+  animation: appleMaterialize 0.25s var(--spring-default);
+}
+
+/* =========================================================================
+   13. REDUCED MOTION & ACCESSIBILITY MODES (SKILL.md §14)
+   ========================================================================= */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .modal-backdrop, .token-monitor-modal-card, .timetable-modal-card, .course-dossier-hub, .chat-bubble {
+    animation: none !important;
+    transform: none !important;
+    filter: none !important;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .navbar, .panel, .timetable-modal-card, .token-monitor-modal-card, .chat-bubble.assistant, .course-dossier-hub {
+    background: var(--bg-panel-solid) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --border-color: rgba(255, 255, 255, 0.35);
+    --text-muted: #d0dbe8;
+  }
+  .btn-outline, .status-pill, .chip {
+    border-width: 1.5px;
+  }
+}
+
 
 /* Clickable Doc Badge */
 .doc-badge-link {
@@ -1326,7 +1862,7 @@ body {
         </div>
 
         <div id="bedrock-badge" class="status-pill status-loading" onclick="openTokenModal()" style="cursor: pointer;" title="AI Token & Quota Monitor (Click to view usage)">
-          <span class="dot"></span> Bedrock: Checking...
+          <span class="dot"></span> AI: Checking...
         </div>
         <div id="ntulearn-badge" class="status-pill status-loading">
           <span class="dot"></span> NTULearn: Checking...
@@ -1532,9 +2068,6 @@ async function fetchStatus() {
       bBadge.className = "status-pill status-ready";
       bBadge.innerHTML = `<span class="dot"></span> AI: ${data.llm.primary_provider}`;
       bBadge.title = data.llm.fallback_chain || "";
-    } else if (data.bedrock && data.bedrock.ready) {
-      bBadge.className = "status-pill status-ready";
-      bBadge.innerHTML = `<span class="dot"></span> Bedrock: Active (${data.bedrock.region})`;
     } else {
       bBadge.className = "status-pill status-ready";
       bBadge.innerHTML = `<span class="dot"></span> Agent Core: Hybrid Mode`;
@@ -2647,6 +3180,58 @@ function renderTokenData(data) {
   const elBCalls = document.getElementById("bedrock-today-calls");
   if (elBCalls) elBCalls.textContent = bCalls;
 
+  const bCard = document.getElementById("card-bedrock");
+  const bBadge = document.getElementById("badge-bedrock-status");
+  const isBActive = limits.bedrock && limits.bedrock.is_active;
+  if (bBadge) {
+    if (isBActive) {
+      bBadge.className = "token-badge-active";
+      bBadge.textContent = "Priority 1 (Active)";
+      if (bCard) { bCard.classList.add("active-card"); bCard.style.opacity = "1"; }
+    } else {
+      bBadge.className = "token-badge-standby";
+      bBadge.textContent = "Inactive (Disabled)";
+      if (bCard) { bCard.classList.remove("active-card"); bCard.style.opacity = "0.65"; }
+    }
+  }
+
+  // 1b. XKiro (DeepSeek V4 Pro) Card
+  const xkiro = limits.xkiro || {};
+  const xkModel = document.getElementById("label-xkiro-model");
+  if (xkModel) xkModel.textContent = xkiro.model || "deepseek/deepseek-v4-pro";
+
+  const xkUsed = document.getElementById("label-xkiro-used");
+  if (xkUsed) xkUsed.textContent = (xkiro.used_today || 0).toLocaleString();
+
+  const xkRem = document.getElementById("label-xkiro-remaining");
+  if (xkRem) xkRem.textContent = (xkiro.remaining_today || 0).toLocaleString();
+
+  const xkPct = document.getElementById("label-xkiro-percent");
+  if (xkPct) xkPct.textContent = `${xkiro.percent_used || 0}%`;
+
+  const xkFill = document.getElementById("bar-xkiro-fill");
+  if (xkFill) {
+    xkFill.style.width = `${Math.min(100, xkiro.percent_used || 0)}%`;
+  }
+
+  const xkCard = document.getElementById("card-xkiro");
+  const xkBadge = document.getElementById("badge-xkiro-status");
+  if (xkBadge) {
+    if (xkiro.is_active && !isBActive) {
+      xkBadge.className = "token-badge-active";
+      xkBadge.textContent = "Priority 1 (Active Brain)";
+      if (xkCard) { xkCard.classList.add("active-card"); xkCard.style.opacity = "1"; }
+    } else if (xkiro.is_active) {
+      xkBadge.className = "token-badge-active";
+      xkBadge.textContent = "Priority 2 (Active)";
+      if (xkCard) xkCard.style.opacity = "1";
+    } else {
+      xkBadge.className = "token-badge-standby";
+      xkBadge.textContent = "Standby";
+      if (xkCard) { xkCard.classList.remove("active-card"); xkCard.style.opacity = "0.65"; }
+    }
+  }
+
   // 2. Groq Card
   const groq = limits.groq || {};
   const gModel = document.getElementById("label-groq-model");
@@ -2821,7 +3406,7 @@ async function testTokenPing() {
           <div class="token-models-grid">
             <!-- 1. Groq -->
                         <!-- 0. AWS Bedrock (Priority 1) -->
-            <div class="token-model-card active-card" id="card-bedrock">
+            <div class="token-model-card" id="card-bedrock" style="opacity: 0.65;">
               <div class="token-card-header">
                 <span class="token-model-name">
                   &#9729;&#65039; AWS Bedrock
@@ -2856,12 +3441,47 @@ async function testTokenPing() {
               </div>
             </div>
 
+                        <div class="token-model-card active-card" id="card-xkiro" style="border-color: rgba(99, 102, 241, 0.45); background: linear-gradient(135deg, rgba(30, 27, 75, 0.4) 0%, rgba(15, 23, 42, 0.6) 100%);">
+              <div class="token-card-header">
+                <span class="token-model-name" style="color: #a5b4fc;">
+                  &#129504; XKiro AI Gateway
+                </span>
+                <span id="badge-xkiro-status" class="token-badge-active" style="background: rgba(99, 102, 241, 0.25); color: #818cf8; border-color: rgba(99, 102, 241, 0.5);">Priority 2 (Lead Brain)</span>
+              </div>
+              <div style="font-size:0.75rem; color:var(--text-muted);">
+                Model: <strong style="color:#e2e8f0;" id="label-xkiro-model">deepseek/deepseek-v4-pro</strong>
+              </div>
+              <div class="token-bar-wrapper">
+                <div class="token-bar-label">
+                  <span>Daily Free Quota (5M)</span>
+                  <span id="label-xkiro-percent">0%</span>
+                </div>
+                <div class="token-progress-track">
+                  <div id="bar-xkiro-fill" class="token-progress-fill" style="width: 0%; background: linear-gradient(90deg, #6366f1, #818cf8);"></div>
+                </div>
+              </div>
+              <div class="token-metrics-row">
+                <div>
+                  <span class="token-metric-k">Used</span>
+                  <span class="token-metric-v" id="label-xkiro-used">0</span>
+                </div>
+                <div>
+                  <span class="token-metric-k">Remaining</span>
+                  <span class="token-metric-v" id="label-xkiro-remaining">5,000,000</span>
+                </div>
+                <div>
+                  <span class="token-metric-k">Today Calls</span>
+                  <span class="token-metric-v" id="xkiro-today-calls">0</span>
+                </div>
+              </div>
+            </div>
+
             <div class="token-model-card" id="card-groq">
               <div class="token-card-header">
                 <span class="token-model-name">
                   &#9889; Groq Cloud
                 </span>
-                <span id="badge-groq-status" class="token-badge-standby">Priority 2 (Fallback)</span>
+                <span id="badge-groq-status" class="token-badge-standby">Priority 3 (Fallback)</span>
               </div>
               <div style="font-size:0.75rem; color:var(--text-muted);">
                 Model: <strong style="color:#e2e8f0;" id="label-groq-model">qwen/qwen3.8-27b</strong>
@@ -3058,6 +3678,75 @@ async function testTokenPing() {
         </div>
       </div>
     </div>
+
+
+  <!-- Apple Multimodal Feedback & Micro-interaction Engine (SKILL.md §13) -->
+  <script>
+    class AppleHapticAudio {
+      constructor() {
+        this.ctx = null;
+        this.muted = false;
+      }
+      init() {
+        if (!this.ctx && (window.AudioContext || window.webkitAudioContext)) {
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          this.ctx = new AudioContextClass();
+        }
+      }
+      playTap(freq = 1200, duration = 0.015, gainVal = 0.035) {
+        if (this.muted) return;
+        try {
+          this.init();
+          if (!this.ctx) return;
+          if (this.ctx.state === 'suspended') {
+            this.ctx.resume();
+          }
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(120, this.ctx.currentTime + duration);
+          gain.gain.setValueAtTime(gainVal, this.ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + duration);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start();
+          osc.stop(this.ctx.currentTime + duration);
+        } catch(e) {}
+      }
+      playSuccess() {
+        if (this.muted) return;
+        try {
+          this.init();
+          if (!this.ctx) return;
+          if (this.ctx.state === 'suspended') {
+            this.ctx.resume();
+          }
+          const now = this.ctx.currentTime;
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(587.33, now); // D5
+          osc.frequency.setValueAtTime(880.00, now + 0.05); // A5
+          gain.gain.setValueAtTime(0.05, now);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.15);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start(now);
+          osc.stop(now + 0.15);
+        } catch(e) {}
+      }
+    }
+    window.appleHaptic = new AppleHapticAudio();
+
+    // Attach instant tactile feedback to all interactive elements on pointerdown (kill latency §1)
+    document.addEventListener('pointerdown', (e) => {
+      const interactive = e.target.closest('.btn, .tab-btn, .chip, .task-check-btn, .timeline-card, .btn-mic, .btn-read-bubble, .dossier-tab-btn, .doc-badge-link');
+      if (interactive) {
+        window.appleHaptic.playTap(1400, 0.012, 0.035);
+      }
+    }, { passive: true });
+  </script>
 
 </body>
 </html>

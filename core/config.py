@@ -46,3 +46,11 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 GROQ_MODEL = os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
+
+# XKiro Gateway & DeepSeek V4 Pro Config
+XKIRO_API_KEY = os.getenv("XKIRO_API_KEY", "")
+XKIRO_BASE_URL = os.getenv("XKIRO_BASE_URL", "https://api.xkiro.com/v1")
+XKIRO_MODEL = os.getenv("XKIRO_MODEL", "deepseek/deepseek-v4-pro")
+
+# Telegram Bot Config
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()

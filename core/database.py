@@ -6,176 +6,216 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 from core.config import DB_PATH
 
-def get_connection():
-    conn = sqlite3.connect(str(DB_PATH))
+import threading
+
+_user_context = threading.local()
+PRIMARY_USER_ID = "971915892"  # Harvey's Telegram user ID (Primary Admin Workspace)
+
+def set_user_context(user_id: Optional[Any] = None):
+    _user_context.user_id = str(user_id) if user_id else None
+
+def get_current_user_id() -> Optional[str]:
+    return getattr(_user_context, "user_id", None)
+
+def get_user_db_path(user_id: Optional[str] = None) -> Path:
+    uid = user_id or get_current_user_id()
+    # Primary user (Harvey) or default local web app maps to main database
+    if not uid or str(uid) == PRIMARY_USER_ID:
+        return DB_PATH
+
+    # Any friend or guest gets an isolated user database
+    from core.config import DATA_DIR
+    user_dir = DATA_DIR / "users" / str(uid)
+    user_dir.mkdir(parents=True, exist_ok=True)
+    return user_dir / "workday_os.db"
+
+def get_user_downloads_dir(user_id: Optional[str] = None) -> Path:
+    uid = user_id or get_current_user_id()
+    if not uid or str(uid) == PRIMARY_USER_ID:
+        from core.config import DOWNLOADS_DIR
+        return DOWNLOADS_DIR
+    from core.config import BASE_DIR
+    user_downloads = BASE_DIR / "downloads" / "users" / str(uid)
+    user_downloads.mkdir(parents=True, exist_ok=True)
+    return user_downloads
+
+def get_connection(user_id: Optional[str] = None):
+    db_file = get_user_db_path(user_id)
+    needs_init = not db_file.exists()
+    conn = sqlite3.connect(str(db_file))
     conn.row_factory = sqlite3.Row
+    if needs_init:
+        _init_db_schema(conn)
     return conn
 
 def init_db():
     with get_connection() as conn:
-        cursor = conn.cursor()
+        _init_db_schema(conn)
 
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS courses (
-            id TEXT PRIMARY KEY,
-            course_code TEXT,
-            title TEXT,
-            term TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """)
+def _init_db_schema(conn: sqlite3.Connection):
+    cursor = conn.cursor()
 
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS course_materials (
-            id TEXT PRIMARY KEY,
-            course_id TEXT,
-            course_code TEXT,
-            title TEXT,
-            content_type TEXT,
-            url TEXT,
-            download_url TEXT,
-            parent_id TEXT,
-            local_path TEXT,
-            downloaded INTEGER DEFAULT 0,
-            file_size INTEGER DEFAULT 0,
-            file_name TEXT,
-            doc_type TEXT DEFAULT 'UNKNOWN',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (course_id) REFERENCES courses (id)
-        )
-        """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS courses (
+        id TEXT PRIMARY KEY,
+        course_code TEXT,
+        title TEXT,
+        term TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
 
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS announcements (
-            id TEXT PRIMARY KEY,
-            course_id TEXT,
-            course_code TEXT,
-            title TEXT,
-            body TEXT,
-            posted_at TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS course_materials (
+        id TEXT PRIMARY KEY,
+        course_id TEXT,
+        course_code TEXT,
+        title TEXT,
+        content_type TEXT,
+        url TEXT,
+        download_url TEXT,
+        parent_id TEXT,
+        local_path TEXT,
+        downloaded INTEGER DEFAULT 0,
+        file_size INTEGER DEFAULT 0,
+        file_name TEXT,
+        doc_type TEXT DEFAULT 'UNKNOWN',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (course_id) REFERENCES courses (id)
+    )
+    """)
 
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS tasks (
-            id TEXT PRIMARY KEY,
-            title TEXT NOT NULL,
-            source TEXT DEFAULT 'manual',
-            course_code TEXT,
-            term TEXT DEFAULT '26S1',
-            due_date TEXT,
-            estimated_minutes INTEGER DEFAULT 60,
-            priority_score REAL DEFAULT 5.0,
-            status TEXT DEFAULT 'pending',
-            notes TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS announcements (
+        id TEXT PRIMARY KEY,
+        course_id TEXT,
+        course_code TEXT,
+        title TEXT,
+        body TEXT,
+        posted_at TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
 
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS token_usage (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            provider TEXT NOT NULL,
-            model TEXT NOT NULL,
-            prompt_tokens INTEGER DEFAULT 0,
-            completion_tokens INTEGER DEFAULT 0,
-            total_tokens INTEGER DEFAULT 0,
-            latency_ms REAL DEFAULT 0.0,
-            status TEXT DEFAULT 'success',
-            endpoint TEXT DEFAULT 'chat',
-            error_message TEXT DEFAULT '',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS tasks (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        source TEXT DEFAULT 'manual',
+        course_code TEXT,
+        term TEXT DEFAULT '26S1',
+        due_date TEXT,
+        estimated_minutes INTEGER DEFAULT 60,
+        priority_score REAL DEFAULT 5.0,
+        status TEXT DEFAULT 'pending',
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
 
-        cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_token_usage_created ON token_usage(created_at)
-        """)
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS chat_messages (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            session_id TEXT DEFAULT 'default',
-            role TEXT NOT NULL,
-            agent_name TEXT DEFAULT 'Lead Orchestrator',
-            content TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS token_usage (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        provider TEXT NOT NULL,
+        model TEXT NOT NULL,
+        prompt_tokens INTEGER DEFAULT 0,
+        completion_tokens INTEGER DEFAULT 0,
+        total_tokens INTEGER DEFAULT 0,
+        latency_ms REAL DEFAULT 0.0,
+        status TEXT DEFAULT 'success',
+        endpoint TEXT DEFAULT 'chat',
+        error_message TEXT DEFAULT '',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
 
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS parsed_documents (
-            id TEXT PRIMARY KEY,
-            course_id TEXT,
-            course_code TEXT,
-            title TEXT,
-            file_name TEXT,
-            doc_type TEXT DEFAULT 'UNKNOWN',
-            week_number INTEGER DEFAULT 0,
-            topic TEXT,
-            summary TEXT,
-            local_path TEXT,
-            schedule_data_json TEXT,
-            raw_text_excerpt TEXT,
-            extracted_questions TEXT,
-            is_solution INTEGER DEFAULT 0,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """)
+    cursor.execute("""
+    CREATE INDEX IF NOT EXISTS idx_token_usage_created ON token_usage(created_at)
+    """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS chat_messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id TEXT DEFAULT 'default',
+        role TEXT NOT NULL,
+        agent_name TEXT DEFAULT 'Lead Orchestrator',
+        content TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
 
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS course_schedules (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            course_code TEXT NOT NULL,
-            week_number INTEGER DEFAULT 0,
-            event_type TEXT DEFAULT 'lecture',
-            title TEXT NOT NULL,
-            event_date TEXT,
-            source_doc_id TEXT,
-            source_doc_title TEXT,
-            notes TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS parsed_documents (
+        id TEXT PRIMARY KEY,
+        course_id TEXT,
+        course_code TEXT,
+        title TEXT,
+        file_name TEXT,
+        doc_type TEXT DEFAULT 'UNKNOWN',
+        week_number INTEGER DEFAULT 0,
+        topic TEXT,
+        summary TEXT,
+        local_path TEXT,
+        schedule_data_json TEXT,
+        raw_text_excerpt TEXT,
+        extracted_questions TEXT,
+        is_solution INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
 
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS timetable_documents (
-            id TEXT PRIMARY KEY,
-            file_name TEXT NOT NULL,
-            file_path TEXT NOT NULL,
-            file_size INTEGER DEFAULT 0,
-            student_name TEXT,
-            term TEXT DEFAULT '26S1',
-            total_courses INTEGER DEFAULT 0,
-            total_aus INTEGER DEFAULT 0,
-            data_json TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS course_schedules (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        course_code TEXT NOT NULL,
+        week_number INTEGER DEFAULT 0,
+        event_type TEXT DEFAULT 'lecture',
+        title TEXT NOT NULL,
+        event_date TEXT,
+        source_doc_id TEXT,
+        source_doc_title TEXT,
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS timetable_documents (
+        id TEXT PRIMARY KEY,
+        file_name TEXT NOT NULL,
+        file_path TEXT NOT NULL,
+        file_size INTEGER DEFAULT 0,
+        student_name TEXT,
+        term TEXT DEFAULT '26S1',
+        total_courses INTEGER DEFAULT 0,
+        total_aus INTEGER DEFAULT 0,
+        data_json TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
 
 
-        # Migrations for existing tables
-        columns_to_add = [
-            ('course_materials', 'course_code', 'TEXT'),
-            ('course_materials', 'file_size', 'INTEGER DEFAULT 0'),
-            ('course_materials', 'file_name', 'TEXT'),
-            ('course_materials', 'doc_type', "TEXT DEFAULT 'UNKNOWN'"),
-            ('tasks', 'term', "TEXT DEFAULT '26S1'"),
-            ('parsed_documents', 'raw_text_excerpt', 'TEXT'),
-            ('parsed_documents', 'extracted_questions', 'TEXT'),
-            ('parsed_documents', 'is_solution', 'INTEGER DEFAULT 0'),
-        ]
-        for tbl, col, col_type in columns_to_add:
-            try:
-                conn.execute(f"ALTER TABLE {tbl} ADD COLUMN {col} {col_type}")
-            except Exception:
-                pass
+    # Migrations for existing tables
+    columns_to_add = [
+        ('course_materials', 'course_code', 'TEXT'),
+        ('course_materials', 'file_size', 'INTEGER DEFAULT 0'),
+        ('course_materials', 'file_name', 'TEXT'),
+        ('course_materials', 'doc_type', "TEXT DEFAULT 'UNKNOWN'"),
+        ('tasks', 'term', "TEXT DEFAULT '26S1'"),
+        ('parsed_documents', 'raw_text_excerpt', 'TEXT'),
+        ('parsed_documents', 'extracted_questions', 'TEXT'),
+        ('parsed_documents', 'is_solution', 'INTEGER DEFAULT 0'),
+    ]
+    for tbl, col, col_type in columns_to_add:
+        try:
+            conn.execute(f"ALTER TABLE {tbl} ADD COLUMN {col} {col_type}")
+        except Exception:
+            pass
 
-        conn.commit()
+    conn.commit()
 
 def upsert_course(course_id: str, course_code: str, title: str, term: str):
     with get_connection() as conn:

@@ -812,14 +812,27 @@ CRITICAL INSTRUCTION: Today is {day_name}, {date_str} (07 September 2026 is stri
                     openai_msgs.append({"role": r, "content": t})
             openai_msgs.append({"role": "user", "content": current_context})
 
-            max_turns = 3
+            max_turns = 4
             turn = 0
             while turn < max_turns:
                 turn += 1
-                tools_to_use = None if (delegation_steps and turn >= 2) else OPENAI_TOOL_DEFINITIONS
+                is_final_turn = (turn >= max_turns)
+                
+                # Keep tools available throughout the multi-agent chain.
+                # Only on the final turn force plain-text synthesis.
+                tools_to_use = OPENAI_TOOL_DEFINITIONS
+                tool_choice = "none" if is_final_turn else "auto"
+
+                if is_final_turn and delegation_steps:
+                    openai_msgs.append({
+                        "role": "user",
+                        "content": "Please synthesize all findings gathered from the sub-agents above and provide your complete, well-formatted response to the student now."
+                    })
+
                 res_msg, provider = llm_provider.chat_completion(
                     messages=openai_msgs,
                     tools=tools_to_use,
+                    tool_choice=tool_choice,
                     system_prompt=LEAD_SYSTEM_PROMPT,
                     temperature=0.2,
                     max_tokens=2048
@@ -830,7 +843,7 @@ CRITICAL INSTRUCTION: Today is {day_name}, {date_str} (07 September 2026 is stri
                     break
 
                 tool_calls = getattr(res_msg, "tool_calls", None)
-                if tool_calls and len(tool_calls) > 0:
+                if tool_calls and len(tool_calls) > 0 and not is_final_turn:
                     openai_msgs.append({
                         "role": "assistant",
                         "content": res_msg.content or "",
@@ -867,9 +880,29 @@ CRITICAL INSTRUCTION: Today is {day_name}, {date_str} (07 September 2026 is stri
                             "content": json.dumps(subagent_out)
                         })
                 else:
-                    if res_msg.content:
-                        final_reply = res_msg.content
-                    break
+                    raw_content = (res_msg.content or "").strip()
+                    # Filter out any stray gateway tool error messages
+                    if "is not available in this request" not in raw_content and raw_content:
+                        final_reply = raw_content
+                        break
+                    elif "is not available in this request" in raw_content:
+                        # Fallback request to force text synthesis
+                        openai_msgs.append({
+                            "role": "user",
+                            "content": "Synthesize the extracted findings and answer the question in plain markdown text directly."
+                        })
+                        fallback_msg, _ = llm_provider.chat_completion(
+                            messages=openai_msgs,
+                            tools=None,
+                            system_prompt=LEAD_SYSTEM_PROMPT,
+                            temperature=0.2,
+                            max_tokens=2048
+                        )
+                        if fallback_msg and fallback_msg.content:
+                            final_reply = fallback_msg.content.strip()
+                        break
+                    else:
+                        break
 
         except Exception as e:
             print(f"[Agents] Error during Groq/Gemini execution ({e}), falling back to local specialist...")

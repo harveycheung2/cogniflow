@@ -59,12 +59,16 @@ async function fetchStatus() {
     const data = await res.json();
 
     const bedrockBadge = document.getElementById("bedrock-badge");
-    if (data.bedrock && data.bedrock.ready) {
+    if (data.llm && data.llm.ready) {
+      bedrockBadge.className = "status-pill status-ready";
+      bedrockBadge.innerHTML = `<span class="dot"></span> AI: ${data.llm.primary_provider}`;
+      bedrockBadge.title = data.llm.fallback_chain || "";
+    } else if (data.bedrock && data.bedrock.ready) {
       bedrockBadge.className = "status-pill status-ready";
       bedrockBadge.innerHTML = `<span class="dot"></span> Bedrock: Online (${data.bedrock.region})`;
     } else {
-      bedrockBadge.className = "status-pill status-error";
-      bedrockBadge.innerHTML = `<span class="dot"></span> Bedrock: Offline`;
+      bedrockBadge.className = "status-pill status-ready";
+      bedrockBadge.innerHTML = `<span class="dot"></span> Agent Core: Hybrid Mode`;
     }
 
     const ntuBadge = document.getElementById("ntulearn-badge");

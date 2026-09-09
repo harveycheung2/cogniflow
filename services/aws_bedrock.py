@@ -55,7 +55,12 @@ class BedrockClient:
 
         self._client = None
 
+    def is_enabled(self) -> bool:
+        return os.getenv("ENABLE_AWS", "false").lower() in ["true", "1", "yes"]
+
     def is_ready(self) -> bool:
+        if not self.is_enabled():
+            return False
         curr_st = os.getenv("AWS_SESSION_TOKEN", "").strip()
         curr_prof = os.getenv("AWS_PROFILE", "").strip()
         if curr_st != self._last_token and curr_prof != self._last_token:

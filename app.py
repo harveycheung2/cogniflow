@@ -19,6 +19,7 @@ from services.planner import generate_day_schedule, extract_tasks_from_announcem
 from services.agents import execute_chat_query
 from services.document_agent import document_agent
 from services.timetable_service import timetable_service
+from services.telegram_bot import telegram_bot_service
 
 # Initialize DB
 db.init_db()
@@ -332,18 +333,23 @@ def get_tokens_usage():
     summary = db.get_token_usage_summary()
     llm_status = llm_provider.get_status()
     
+    XKIRO_DAILY_LIMIT = int(os.getenv("XKIRO_DAILY_TOKEN_LIMIT", 5000000))
     GROQ_DAILY_LIMIT = int(os.getenv("GROQ_DAILY_TOKEN_LIMIT", 500000))
     GEMINI_DAILY_LIMIT = int(os.getenv("GEMINI_DAILY_TOKEN_LIMIT", 1000000))
     
+    xkiro_used_today = 0
     groq_used_today = 0
     gemini_used_today = 0
     for m in summary.get("by_model", []):
         prov = m.get("provider", "").lower()
-        if "groq" in prov:
+        if "xkiro" in prov or "deepseek" in prov:
+            xkiro_used_today += m.get("tokens_today", 0)
+        elif "groq" in prov:
             groq_used_today += m.get("tokens_today", 0)
         elif "gemini" in prov:
             gemini_used_today += m.get("tokens_today", 0)
             
+    xkiro_remaining = max(0, XKIRO_DAILY_LIMIT - xkiro_used_today)
     groq_remaining = max(0, GROQ_DAILY_LIMIT - groq_used_today)
     gemini_remaining = max(0, GEMINI_DAILY_LIMIT - gemini_used_today)
     
@@ -357,9 +363,18 @@ def get_tokens_usage():
                 "model": "us.anthropic.claude-sonnet-4-5",
                 "daily_limit": "AWS Enterprise / Pay-As-You-Go",
                 "used_today": sum([m.get("tokens_today", 0) for m in summary.get("by_model", []) if "bedrock" in (m.get("provider") or "").lower()]),
-                "remaining_today": "High Capacity",
+                "remaining_today": "Active" if llm_status.get("bedrock_active", False) else "Disabled",
                 "percent_used": 0,
-                "is_active": bedrock_client.is_ready()
+                "is_active": llm_status.get("bedrock_active", False)
+            },
+            "xkiro": {
+                "name": "XKiro (DeepSeek V4 Pro)",
+                "model": os.getenv("XKIRO_MODEL", "deepseek/deepseek-v4-pro"),
+                "daily_limit": XKIRO_DAILY_LIMIT,
+                "used_today": xkiro_used_today,
+                "remaining_today": xkiro_remaining,
+                "percent_used": round((xkiro_used_today / XKIRO_DAILY_LIMIT) * 100, 2) if XKIRO_DAILY_LIMIT else 0,
+                "is_active": llm_status.get("xkiro_active", False)
             },
             "groq": {
                 "name": "Groq Cloud",
@@ -407,3 +422,15 @@ def test_token_ping():
 def reset_tokens():
     db.clear_token_usage()
     return {"status": "ok", "message": "Token usage history cleared"}
+
+
+# Auto-start Telegram Bot in background thread if configured
+@app.on_event("startup")
+def startup_telegram_bot():
+    from core.config import TELEGRAM_BOT_TOKEN
+    if TELEGRAM_BOT_TOKEN:
+        try:
+            telegram_bot_service.start_polling(daemon=True)
+            print(f"[CogniFlow] Telegram Bot polling initialized in background thread.")
+        except Exception as e:
+            print(f"[CogniFlow] Warning: Could not auto-start Telegram bot: {e}")
