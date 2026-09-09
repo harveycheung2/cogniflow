@@ -45,6 +45,8 @@ class TelegramBot:
         self.is_running = False
         self.last_update_id = 0
         self.bot_info = {}
+        # Multi-turn conversational state tracking per chat_id (e.g. interactive /addtask)
+        self.user_states: Dict[int, Dict[str, Any]] = {}
 
     def api_call(self, endpoint: str, data: Optional[Dict[str, Any]] = None, files: Optional[Dict[str, Tuple[str, bytes]]] = None, timeout: int = 35) -> Dict[str, Any]:
         url = f"{self.base_url}/{endpoint}"
@@ -181,7 +183,7 @@ class TelegramBot:
                 "📚 *Your Enrolled Modules (26S1):*\n"
                 "You don't have any modules registered yet!\n\n"
                 "💡 *How to add your courses:*\n"
-                "1. **Send your Timetable PDF** directly here to auto-import all your courses and class timings!\n"
+                "1. **Send your Timetable PDF** directly here to auto-import your courses and class timings!\n"
                 "2. Or add a course manually: `/addcourse SC2001 Algorithm Design`"
             )
 
@@ -222,10 +224,10 @@ class TelegramBot:
 
         if tasks:
             lines.append("*Pending Action Items:*")
-            for t in tasks[:5]:
+            for t in tasks[:6]:
                 due = t.get("due_date", "Soon")
-                prio = t.get("priority_score", 1)
-                prio_tag = "🔴 High" if prio >= 3 else "🟡 Medium" if prio == 2 else "🟢 Normal"
+                prio = t.get("priority_score", 1.0)
+                prio_tag = "🔴 High" if prio >= 7.0 else "🟡 Medium" if prio >= 4.0 else "🟢 Normal"
                 lines.append(f"• [{prio_tag}] *{t.get('title')}* (Due: {due})")
             lines.append("")
 
@@ -241,7 +243,6 @@ class TelegramBot:
         return "\n".join(lines)
 
     def handle_document_upload(self, chat_id: int, user_id: str, user_name: str, doc: Dict[str, Any], caption: str):
-        """Handles user-uploaded documents (Timetable PDFs, Tutorial sheets, lecture slides)."""
         file_id = doc.get("file_id")
         file_name = doc.get("file_name", f"upload_{int(time.time())}.pdf")
         mime_type = doc.get("mime_type", "")
@@ -273,7 +274,6 @@ class TelegramBot:
                 parsed = timetable_service.parse_timetable_pdf(dest_file)
                 saved = timetable_service.save_timetable(parsed, dest_file, file_name)
 
-                # Register extracted courses into user's courses table
                 courses_added = []
                 for c in parsed.get("courses", []):
                     code = c.get("course_code", "").strip()
@@ -288,17 +288,15 @@ class TelegramBot:
                     f"🎉 *Timetable Registered Successfully!*\n\n"
                     f"• *Parsed Classes:* {len(parsed.get('slots', []))} weekly slots\n"
                     f"• *Modules Detected:* {course_str}\n\n"
-                    f"Your weekly classes and venues are now active in your workspace. Try `/schedule` or ask _When is my next lecture?_!"
+                    f"Your weekly classes and venues are now active in your workspace. Try `/schedule` or ask _'When is my next lecture?'_!"
                 )
                 return
             except Exception as e:
                 logger.error(f"Error parsing timetable PDF: {e}")
-                # Fall through to index as document
 
-        # Otherwise: Index as Course Material / Tutorial Sheet / Notes
+        # Otherwise: Index as Course Material
         try:
             doc_type = infer_doc_type(caption, file_name)
-            # Find matching course code from filename or existing courses
             assigned_code = "General"
             existing_courses = db.get_all_courses(term="26S1")
             for ec in existing_courses:
@@ -331,7 +329,7 @@ class TelegramBot:
                 f"• *File:* `{file_name}`\n"
                 f"• *Module:* `{assigned_code}`\n"
                 f"• *Type:* `{doc_type}`\n\n"
-                f"You can now ask me questions about this document (e.g. _What are the questions in this document?_)!"
+                f"You can now ask me questions about this document (e.g. _'What are the questions in this document?'_)!"
             )
         except Exception as e:
             logger.error(f"Error indexing document: {e}")
@@ -348,9 +346,7 @@ class TelegramBot:
         if not chat_id:
             return
 
-        # =====================================================================
-        # 1. Activate User-Specific Database & File Isolation
-        # =====================================================================
+        # Activate User-Specific Database & File Isolation
         db.set_user_context(user_id)
 
         # Handle Incoming Document/PDF Uploads
@@ -363,7 +359,135 @@ class TelegramBot:
 
         logger.info(f"Incoming from {user_name} ({user_id}): {text}")
 
-        # Command Dispatch
+        # =====================================================================
+        # INTERACTIVE TASK CREATION CONVERSATIONAL FLOW
+        # =====================================================================
+        user_state = self.user_states.get(chat_id)
+
+        # Allow user to abort at any time
+        if text.startswith("/cancel"):
+            if user_state:
+                self.user_states.pop(chat_id, None)
+                self.send_message(chat_id, "🚫 Action cancelled. What would you like to do next?")
+            else:
+                self.send_message(chat_id, "No active action to cancel.")
+            return
+
+        # Step 2: Waiting for deadline after user entered task title
+        if user_state and user_state.get("step") == "waiting_task_deadline":
+            deadline_input = text.strip()
+            task_title = user_state.get("task_title", "New Task")
+            course_code = user_state.get("course_code", "General")
+            self.user_states.pop(chat_id, None)
+
+            # Determine priority score based on deadline urgency
+            lower_d = deadline_input.lower()
+            if lower_d in ["none", "skip", "no", "nil", "-", "no deadline"]:
+                due_date_str = "No fixed deadline"
+                priority_score = 3.0
+                prio_label = "🟢 Normal"
+            elif any(w in lower_d for w in ["today", "tonight", "urgent", "asap", "immediate"]):
+                due_date_str = deadline_input
+                priority_score = 9.0
+                prio_label = "🔴 Critical"
+            elif any(w in lower_d for w in ["tomorrow", "tmr"]):
+                due_date_str = deadline_input
+                priority_score = 8.0
+                prio_label = "🔴 High"
+            else:
+                due_date_str = deadline_input
+                priority_score = 5.0
+                prio_label = "🟡 Medium"
+
+            task_id = f"task_{uuid.uuid4().hex[:8]}"
+            db.upsert_task(
+                task_id=task_id,
+                title=task_title,
+                source="telegram",
+                course_code=course_code,
+                due_date=due_date_str,
+                estimated_minutes=60,
+                priority_score=priority_score,
+                notes=f"Added via Telegram by {user_name}",
+                term="26S1"
+            )
+
+            self.send_message(
+                chat_id,
+                f"✅ *Task Added Successfully!*\n\n"
+                f"📌 *Task:* {task_title}\n"
+                f"📚 *Module:* {course_code}\n"
+                f"⏰ *Deadline:* {due_date_str}\n"
+                f"⚡ *Priority:* {prio_label}\n\n"
+                f"💡 _View your updated schedule anytime with `/schedule` or check pending tasks with `/urgent`._"
+            )
+            return
+
+        # Step 1: Waiting for task title
+        if user_state and user_state.get("step") == "waiting_task_title":
+            task_title = text.strip()
+            detected_course = "General"
+            for c in db.get_all_courses(term="26S1"):
+                if c["course_code"].lower() in task_title.lower():
+                    detected_course = c["course_code"]
+                    break
+
+            self.user_states[chat_id] = {
+                "step": "waiting_task_deadline",
+                "task_title": task_title,
+                "course_code": detected_course
+            }
+
+            self.send_message(
+                chat_id,
+                f"⏰ Got it: *{task_title}*\n\n"
+                f"What is the deadline for this task?\n"
+                f"_(e.g. `Tomorrow 5pm`, `Friday 23:59`, `2026-09-18`, or reply `none` / `skip`)_\n\n"
+                f"💡 _Reply with the deadline, or send `/cancel` to abort._"
+            )
+            return
+
+        # /addtask Trigger
+        if text.startswith("/addtask"):
+            remainder = text.replace("/addtask", "").strip()
+            if remainder:
+                # Title provided directly in command: /addtask Finish Lab Report
+                task_title = remainder
+                detected_course = "General"
+                for c in db.get_all_courses(term="26S1"):
+                    if c["course_code"].lower() in task_title.lower():
+                        detected_course = c["course_code"]
+                        break
+
+                self.user_states[chat_id] = {
+                    "step": "waiting_task_deadline",
+                    "task_title": task_title,
+                    "course_code": detected_course
+                }
+
+                self.send_message(
+                    chat_id,
+                    f"⏰ Got it: *{task_title}*\n\n"
+                    f"What is the deadline for this task?\n"
+                    f"_(e.g. `Tomorrow 5pm`, `Friday 23:59`, `2026-09-18`, or reply `none` / `skip`)_\n\n"
+                    f"💡 _Reply with the deadline, or send `/cancel` to abort._"
+                )
+            else:
+                # Bare /addtask command -> Ask for title first
+                self.user_states[chat_id] = {
+                    "step": "waiting_task_title"
+                }
+
+                self.send_message(
+                    chat_id,
+                    f"📝 *Create a New Action Task*\n\n"
+                    f"What is the title or description of your task?\n"
+                    f"_(e.g. `Finish MH2500 Tutorial 2` or `Prepare SolidWorks Lab Report`)_\n\n"
+                    f"💡 _Reply with the task title, or send `/cancel` to abort._"
+                )
+            return
+
+        # Standard Command Dispatch
         if text.startswith("/start") or text.startswith("/help"):
             is_admin = (user_id == db.PRIMARY_USER_ID)
             role_tag = "👑 Primary Workspace" if is_admin else f"👤 Private Workspace ({user_id})"
@@ -376,6 +500,7 @@ class TelegramBot:
                 "• **Send your Timetable PDF** here to auto-import your class schedule & modules!\n"
                 "• **Send any Tutorial / Lecture PDF** to index and analyze it with AI.\n\n"
                 "*Commands:*\n"
+                "• /addtask - Add a task (interactive prompt for title & deadline)\n"
                 "• /schedule - Today's time-blocked schedule\n"
                 "• /urgent - Upcoming deadlines & urgent notices\n"
                 "• /courses - View your registered modules\n"
@@ -399,15 +524,6 @@ class TelegramBot:
             title = parts[2] if len(parts) > 2 else code
             db.upsert_course(f"course_{code}_{user_id}", code, title, term="26S1")
             self.send_message(chat_id, f"✅ Added course module *{code}*: {title}")
-            return
-
-        if text.startswith("/addtask"):
-            task_text = text.replace("/addtask", "").strip()
-            if not task_text:
-                self.send_message(chat_id, "Usage: `/addtask <Task Description> [due YYYY-MM-DD]`")
-                return
-            db.create_task(title=task_text, course_code="General", term="26S1")
-            self.send_message(chat_id, f"✅ Added task: *{task_text}*")
             return
 
         if text.startswith("/courses") or text.startswith("/modules"):
